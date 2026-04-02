@@ -1,0 +1,69 @@
+services:
+  # 
+  # This is the Pytthon API Gateway
+  # 
+  api_gateway_service:
+    image: python:3.11-slim
+    container_name: api_gateway
+    working_dir: /app
+  
+    volumes:
+      - ./:/app
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    command: >
+      bash -c "pip install --no-cache-dir fastapi uvicorn pydantic requests && 
+      uvicorn api_gateway:app --host 0.0.0.0 --port 3131"
+    ports:
+      - "3131:3131"
+    depends_on:
+      - llm_service
+
+  # 
+  # This is our AI Engine running the LLMs, image recognition
+  # 
+  llm_service:
+    image: ollama/ollama:latest
+    container_name: ollama_service
+    ports:
+      - "11434:11434"
+    
+    volumes:
+      - ollama_data:/root/.ollama
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # 
+  # This is extra so we don't have to download the AI models manually
+  # 
+  llm_init:
+    image: ollama/ollama:latest
+    container_name: ollama_model_puller
+
+    environment:
+      - OLLAMA_HOST=llm_service:11434
+    depends_on:
+      - llm_service
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "
+      echo 'Waiting for Ollama to boot...' &&
+      sleep 10 &&
+      echo 'Pulling LLaVA (Vision)...' &&
+      ollama pull llava &&
+      echo 'Pulling Llama 3.2 (Nutrition)...' &&
+      ollama pull llama3.2 &&
+      echo 'All models pulled successfully! Shutting down init container.'
+      "
+
+
+volumes:
+  ollama_data:
