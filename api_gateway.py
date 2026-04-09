@@ -11,6 +11,10 @@ class ChatPrompt(BaseModel):
 class ImagePrompt(BaseModel):
     base64Image : str
 
+class MealPrompt(BaseModel):
+    name : str
+    gram : int
+
 @app.get("/")
 def index():
     
@@ -68,7 +72,7 @@ def manage_chat_prompt(user_prompt: ChatPrompt):
 
     return final_output
 
-@app.post("/image")
+@app.post("/mealimage")
 def manage_image_prompt(user_prompt: ImagePrompt):
     
     print("Got the image in user_prompt")
@@ -140,6 +144,11 @@ def manage_image_prompt(user_prompt: ImagePrompt):
             "type": "object",
             "properties": 
             {
+                "calories":
+                {
+                    "type": "integer",
+                    "description": "Calories in kcal"
+                },
                 "proteins": 
                 {
                     "type": "integer",
@@ -156,13 +165,13 @@ def manage_image_prompt(user_prompt: ImagePrompt):
                     "description": "Fat content in grams"
                 }
             },
-            "required": ["proteins", "carbohydrates", "fats"]
+            "required": ["calories", "proteins", "carbohydrates", "fats"]
         }
     }
 
-    response2 = requests.post(URL, json=ai_payload2).json()
+    response = requests.post(URL, json=ai_payload2).json()
 
-    nutririon_output = response2["message"]["content"]
+    nutririon_output = response["message"]["content"]
 
     print(f"Got the nutrition output: {nutririon_output}")
 
@@ -177,3 +186,66 @@ def manage_image_prompt(user_prompt: ImagePrompt):
 
     return final_output
 
+@app.post("/mealnoimage")
+def manage_meal_prompt(user_prompt: MealPrompt):
+    
+    URL = "http://llm_service:11434/api/chat"
+
+    ai_payload = {
+        "model": "llama3.2",
+
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a nutritionist. Calculate the macros for the provided meal."
+            },
+            {
+                "role": "user",
+                "content": f"{user_prompt.gram} grams of {user_prompt.name}."
+            } 
+        ],
+
+        "stream": False,
+        "format": {
+            "type": "object",
+            "properties": 
+            {
+                "calories":
+                {
+                    "type": "integer",
+                    "description": "Calories in kcal"
+                },
+                "proteins": 
+                {
+                    "type": "integer",
+                    "description": "Protein content in grams"
+                },
+                "carbohydrates": 
+                {
+                    "type": "integer",
+                    "description": "Carbohydrate content in grams"
+                },
+                "fats": 
+                {
+                    "type": "integer",
+                    "description": "Fat content in grams"
+                }
+            },
+            "required": ["calories", "proteins", "carbohydrates", "fats"]
+        }
+    }
+
+    response = requests.post(URL, json=ai_payload).json()
+
+    nutririon_output = response["message"]["content"]
+
+    print(f"Got the nutrition output: {nutririon_output}")
+
+    try:
+        final_output = json.loads(nutririon_output)
+    except json.JSONDecodeError:
+        return {"error": "Bu herif json göndermemiş"}
+
+    print(f"Got the final response: {final_output}")
+
+    return final_output
