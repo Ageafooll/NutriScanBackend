@@ -2,9 +2,14 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import requests
 import json
+import pymysql
+from passlib.context import CryptContext
 
 app = FastAPI()
 
+#
+# Kinds of payloads that our endpoints will accept
+#
 class ChatPrompt(BaseModel):
     prompt : str
 
@@ -15,6 +20,11 @@ class MealPrompt(BaseModel):
     name : str
     gram : int
 
+class AuthenticationPayload(BaseModel):
+    username : str
+    password : str
+
+
 @app.get("/")
 def index():
     
@@ -22,6 +32,14 @@ def index():
 
     return response
 
+
+#               ----------------------------------
+#               Following endpoints are about LLMs
+#               ----------------------------------
+
+#
+# Regular chat prompts are sent here
+#
 @app.post("/chat")
 def manage_chat_prompt(user_prompt: ChatPrompt):
     
@@ -68,10 +86,13 @@ def manage_chat_prompt(user_prompt: ChatPrompt):
     try:
         final_output = json.loads(chat_response)
     except json.JSONDecodeError:
-        return {"error":"Bu hıyar JSON göndermemiş"}
+        return {"error":"JSON göndermemiş"}
 
     return final_output
 
+#
+# Image prompts are sent here to recieve nutrition information
+#
 @app.post("/mealimage")
 def manage_image_prompt(user_prompt: ImagePrompt):
     
@@ -123,7 +144,7 @@ def manage_image_prompt(user_prompt: ImagePrompt):
     try:
         food_in_image = json.loads(image_rec_output)
     except json.JSONDecodeError:
-        return {"error":"Bu hıyar JSON göndermemiş"}
+        return {"error":"Dayi JSON göndermemiş"}
 
     ai_payload2 = {
         "model": "llama3.2",
@@ -186,6 +207,9 @@ def manage_image_prompt(user_prompt: ImagePrompt):
 
     return final_output
 
+#
+# Meal information with no images are sent here to recieve nutrition information
+#
 @app.post("/mealnoimage")
 def manage_meal_prompt(user_prompt: MealPrompt):
     
@@ -249,3 +273,128 @@ def manage_meal_prompt(user_prompt: MealPrompt):
     print(f"Got the final response: {final_output}")
 
     return final_output
+
+
+#           --------------------------------------
+#           Following enpoints are about databases
+#           --------------------------------------
+
+#
+# Username and passwords are sent here to create account
+#
+@app.post("/register")
+def manage_register(payload: AuthenticationPayload):
+
+    #We hash and salt the password 
+    crypt_context = CryptContext(
+        schemes=["argon2"],
+        default="argon2",
+        deprecated="auto",
+    )
+
+    hashed_salted_pw = crypt_context.hash(payload.password)
+
+
+    try:
+        connection = pymysql.connect(
+            host="db_service",
+            user="python_api",
+            password="1234",
+            database="users_db",
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )        
+    except pymysql.Error as e:
+        printf(f"Niye baglanamadi? {e}")
+
+
+    init_sql = '''CREATE TABLE IF NOT EXISTS users (
+             user_id INT AUTO_INCREMENT PRIMARY KEY,
+             username VARCHAR(30),
+             password VARCHAR(255),
+             is_premium INT,
+             active INT); '''
+    
+    check_sql = "SELECT username FROM users WHERE username=%s;"
+             
+    insert_sql = "INSERT INTO users (username, password, is_premium, active) VALUES (%s, %s, 0, 1);"
+             
+
+    try:
+        with connection.cursor() as cursor:
+
+            cursor.execute(init_sql)
+
+            cursor.execute(check_sql, (payload.username))
+
+            if(cursor.rowcount != 0):
+                print(f"User {payload.username} already exists")
+                return {"message": f"User {payload.username} already exists"}            
+
+            cursor.execute(insert_sql, (payload.username, hashed_salted_pw))
+
+            connection.commit()
+            print(f"created the user {payload.username}")
+
+    except pymysql.Error as e:
+        print(f"query'de hata {e}")
+        return {"message": "Olmadi dayi"}
+
+    finally:
+        connection.close()
+
+    return {"message": "Created user"}
+
+
+#
+# Username and passwords are sent here for authentication
+#
+@app.post("/auth")
+def manage_authentication(payload: AuthenticationPayload):
+
+    crypt_context = CryptContext(
+        schemes=["argon2"],
+        default="argon2",
+        deprecated="auto",
+    )
+
+
+    try:
+        connection = pymysql.connect(
+            host="db_service",
+            user="python_api",
+            password="1234",
+            database="users_db",
+            port=3306,
+            cursorclass=pymysql.cursors.DictCursor
+        )        
+    except pymysql.Error as e:
+        printf(f"Niye baglanamadi? {e}")
+
+    auth_sql = "SELECT password FROM users WHERE username=%s;"
+
+    try:
+        with connection.cursor() as cursor:
+
+            cursor.execute(auth_sql,(payload.username))
+
+            if(cursor.rowcount == 0):
+                print(f"User {payload.username} doesn't exists")
+                return {"message": "Username or password is wrong"}            
+
+
+            result = cursor.fetchone()
+
+            if(crypt_context.verify(payload.password, result["password"])):
+                return {"message": "Success"}
+            
+            else:
+                return {"message": "Username or password is wrong"}
+            
+
+    except pymysql.Error as e:
+        print(f"query'de hata {e}")
+        return {"message": "Olmadi dayi"}
+
+    finally:
+        connection.close()

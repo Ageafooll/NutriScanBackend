@@ -14,7 +14,7 @@ services:
       - PYTHONUNBUFFERED=1
 
     command: >
-      bash -c "pip install --no-cache-dir fastapi uvicorn pydantic requests && 
+      bash -c "pip install --no-cache-dir fastapi uvicorn pydantic requests pymysql passlib passlib[argon2] && 
       uvicorn api_gateway:app --host 0.0.0.0 --port 3131"
     ports:
       - "3131:3131"
@@ -40,6 +40,22 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
+  #
+  # This is the mariadb database service
+  #
+  db_service:
+    image: mariadb:latest
+    container_name: db_service
+
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+    environment:
+      - MARIADB_ROOT_PASSWORD=1234
+      - MARIADB_DATABASE=users_db
+      - MARIADB_USER=python_api
+      - MARIADB_PASSWORD=1234
 
   # 
   # This is extra so we don't have to download the AI models manually
@@ -67,3 +83,4 @@ services:
 
 volumes:
   ollama_data:
+  mariadb_data:
