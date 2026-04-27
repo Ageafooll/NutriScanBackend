@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 import requests
 import json
 import pymysql
 from passlib.context import CryptContext
+
+from jwt_logic import create_token, get_user_by_token
 
 app = FastAPI()
 
@@ -25,10 +27,12 @@ class AuthenticationPayload(BaseModel):
     password : str
 
 
-@app.get("/")
-def index():
+@app.get("/deneme")
+def deneme(current_user: dict = Depends(get_user_by_token)):
     
-    response = {"bruh":"bruh"}
+    response = {"bruh": "JWT calisiyor"}
+
+    response.update(current_user)
 
     return response
 
@@ -53,8 +57,7 @@ def manage_chat_prompt(user_prompt: ChatPrompt):
         "messages": [
             {
                 "role": "system",
-                "content": "You are a nutritionist. " \
-                           "STRICTLY return the response with a JSON object with the key 'response'."
+                "content": "You are a nutritionist."
             },
             {
                 "role": "user",
@@ -310,10 +313,10 @@ def manage_register(payload: AuthenticationPayload):
 
     init_sql = '''CREATE TABLE IF NOT EXISTS users (
              user_id INT AUTO_INCREMENT PRIMARY KEY,
-             username VARCHAR(30),
+             username VARCHAR(30) UNIQUE,
              password VARCHAR(255),
              is_premium INT,
-             active INT); '''
+             active INT) AUTO_INCREMENT = 1000; '''
     
     check_sql = "SELECT username FROM users WHERE username=%s;"
              
@@ -347,10 +350,14 @@ def manage_register(payload: AuthenticationPayload):
 
 
 #
-# Username and passwords are sent here for authentication
+# Username and passwords are sent here for password authentication
 #
-@app.post("/auth")
+@app.post("/login")
 def manage_authentication(payload: AuthenticationPayload):
+
+    #
+    # First part is about password authentication, no tokens yet
+    #
 
     crypt_context = CryptContext(
         schemes=["argon2"],
@@ -372,11 +379,12 @@ def manage_authentication(payload: AuthenticationPayload):
         printf(f"Niye baglanamadi? {e}")
 
     auth_sql = "SELECT password FROM users WHERE username=%s;"
+    info_sql = "SELECT user_id, is_premium FROM users WHERE username=%s;"
 
     try:
         with connection.cursor() as cursor:
 
-            cursor.execute(auth_sql,(payload.username))
+            cursor.execute(auth_sql,(payload.username,))
 
             if(cursor.rowcount == 0):
                 print(f"User {payload.username} doesn't exists")
@@ -386,7 +394,15 @@ def manage_authentication(payload: AuthenticationPayload):
             result = cursor.fetchone()
 
             if(crypt_context.verify(payload.password, result["password"])):
-                return {"message": "Success"}
+
+                print(f"Password auth was successful for {payload.username}")
+
+                cursor.execute(info_sql,(payload.username,))
+
+                result = cursor.fetchone()
+
+                user_id = result["user_id"]
+                is_premium = result["is_premium"]
             
             else:
                 return {"message": "Username or password is wrong"}
@@ -398,3 +414,17 @@ def manage_authentication(payload: AuthenticationPayload):
 
     finally:
         connection.close()
+
+
+    #
+    # We will handle the token in this part
+    #
+
+    jwt_payload = {"sub": str(user_id), "is_premium": is_premium}
+
+    users_token = create_token(jwt_payload)
+
+    return {"message": "login successful", "access_token": users_token, "token_type": "bearer"}
+
+
+    
