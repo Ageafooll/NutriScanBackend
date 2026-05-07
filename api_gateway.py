@@ -4,7 +4,7 @@ import requests
 import json
 import pymysql
 
-from database_logic import add_user, authenticate_user
+from database_logic import add_user, authenticate_user, remove_user
 from jwt_logic import create_token, get_user_by_token
 
 app = FastAPI()
@@ -13,18 +13,21 @@ app = FastAPI()
 # Kinds of payloads that our endpoints will accept
 #
 class ChatPrompt(BaseModel):
-    prompt : str
+    prompt: str
 
 class ImagePrompt(BaseModel):
-    base64Image : str
+    base64Image: str
 
 class MealPrompt(BaseModel):
-    name : str
-    gram : int
+    name: str
+    gram: int
 
 class AuthenticationPayload(BaseModel):
-    username : str
-    password : str
+    username: str
+    password: str
+
+class RemovePayload(BaseModel):
+    username: str
 
 
 @app.get("/deneme")
@@ -289,7 +292,6 @@ def manage_meal_prompt(user_prompt: MealPrompt):
 def manage_register(payload: AuthenticationPayload):
 
 
-
     match add_user(payload.username, payload.password):
         case 1:
             return {"message": "Created user"}
@@ -341,4 +343,18 @@ def manage_authentication(payload: AuthenticationPayload):
     return {"message": "login successful", "access_token": users_token, "token_type": "bearer"}
 
 
-    
+@app.post("/removeuser")
+def manage_authentication(payload: RemovePayload):
+
+
+    match remove_user(payload.username):
+        case 1:
+            return {"message": "Successfully deleted the user"}
+        case 2:
+            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
+        case 3:
+            return {"message": f"User {payload.username} doesn't exists"} 
+        case 4:
+            raise HTTPException(status_code=500, detail="Something wrong with the query")
+        case _:
+            return {"what":"what?"}

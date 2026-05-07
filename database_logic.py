@@ -85,18 +85,19 @@ def authenticate_user(username: str, password: str ):
 
     try:
         connection = pymysql.connect(
-            host="db_service",
-            user="python_api",
-            password="1234",
-            database="users_db",
-            port=3306,
+            host=HOST,
+            user=USER,
+            password=PASSWORD,
+            database=DATABASE,
+            port=PORT,
             cursorclass=pymysql.cursors.DictCursor
-        )        
+        )              
     except pymysql.Error as e:
         printf(f"Niye baglanamadi? {e}")
         return 2
 
     auth_sql = "SELECT password FROM users WHERE username=%s;"
+
     info_sql = "SELECT user_id, is_premium FROM users WHERE username=%s;"
 
 
@@ -136,3 +137,49 @@ def authenticate_user(username: str, password: str ):
 
     
     return {"user_id": user_id, "is_premium": is_premium}
+
+
+def remove_user(username: str):
+
+    try:
+        connection = pymysql.connect(
+            host=HOST,
+            user=USER,
+            password=PASSWORD,
+            database=DATABASE,
+            port=PORT,
+            cursorclass=pymysql.cursors.DictCursor
+        )              
+    except pymysql.Error as e:
+        printf(f"Niye baglanamadi? {e}")
+        return 2
+    
+    check_sql = "SELECT username FROM users WHERE username=%s;"
+
+    remove_sql = "DELETE FROM users WHERE username=%s;"
+
+    try:
+        with connection.cursor() as cursor:
+
+            cursor.execute(check_sql, (username,))
+
+            if(cursor.rowcount == 0):
+                print(f"User {username} doesn't exists")
+                return 3       
+
+            cursor.execute(remove_sql, (username,))
+
+            connection.commit()
+            print(f"removed the user {username}")
+
+    except pymysql.Error as e:
+        print(f"query'de hata {e}")
+        return 4
+
+
+    finally:
+        connection.close()
+
+    return 1
+
+
