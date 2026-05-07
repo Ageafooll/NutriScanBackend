@@ -3,8 +3,8 @@ from pydantic import BaseModel
 import requests
 import json
 import pymysql
-from passlib.context import CryptContext
 
+from database_logic import add_user, authenticate_user
 from jwt_logic import create_token, get_user_by_token
 
 app = FastAPI()
@@ -73,7 +73,7 @@ def manage_chat_prompt(user_prompt: ChatPrompt):
                 "response":
                 {
                     "type": "string",
-                    "description": "Answer to users request"
+                    "description": "Answer to users prompt"
                 }
             },
             "required": ["response"]
@@ -288,69 +288,24 @@ def manage_meal_prompt(user_prompt: MealPrompt):
 @app.post("/register")
 def manage_register(payload: AuthenticationPayload):
 
-    #We hash and salt the password 
-    crypt_context = CryptContext(
-        schemes=["argon2"],
-        default="argon2",
-        deprecated="auto",
-    )
-
-    hashed_salted_pw = crypt_context.hash(payload.password)
 
 
-    try:
-        connection = pymysql.connect(
-            host="db_service",
-            user="python_api",
-            password="1234",
-            database="users_db",
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )        
-    except pymysql.Error as e:
-        printf(f"Niye baglanamadi? {e}")
-
-
-    init_sql = '''CREATE TABLE IF NOT EXISTS users (
-             user_id INT AUTO_INCREMENT PRIMARY KEY,
-             username VARCHAR(30) UNIQUE,
-             password VARCHAR(255),
-             is_premium INT,
-             active INT) AUTO_INCREMENT = 1000; '''
+    match add_user(payload.username, payload.password):
+        case 1:
+            return {"message": "Created user"}
+        case 2:
+            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
+        case 3:
+            return {"message": f"User {payload.username} already exists"} 
+        case 4:
+            raise HTTPException(status_code=500, detail="Something wrong with the query")
+        case _:
+            return {"what":"what?"}
     
-    check_sql = "SELECT username FROM users WHERE username=%s;"
-             
-    insert_sql = "INSERT INTO users (username, password, is_premium, active) VALUES (%s, %s, 0, 1);"
-             
-
-    try:
-        with connection.cursor() as cursor:
-
-            cursor.execute(init_sql)
-
-            cursor.execute(check_sql, (payload.username))
-
-            if(cursor.rowcount != 0):
-                print(f"User {payload.username} already exists")
-                return {"message": f"User {payload.username} already exists"}            
-
-            cursor.execute(insert_sql, (payload.username, hashed_salted_pw))
-
-            connection.commit()
-            print(f"created the user {payload.username}")
-
-    except pymysql.Error as e:
-        print(f"query'de hata {e}")
-        return {"message": "Olmadi dayi"}
-
-    finally:
-        connection.close()
-
-    return {"message": "Created user"}
 
 
 #
-# Username and passwords are sent here for password authentication
+# Username and passwords are sent here for password authentication, and then you claim the token
 #
 @app.post("/login")
 def manage_authentication(payload: AuthenticationPayload):
@@ -359,61 +314,20 @@ def manage_authentication(payload: AuthenticationPayload):
     # First part is about password authentication, no tokens yet
     #
 
-    crypt_context = CryptContext(
-        schemes=["argon2"],
-        default="argon2",
-        deprecated="auto",
-    )
+    auth_return = authenticate_user(payload.username, payload.password)
 
-
-    try:
-        connection = pymysql.connect(
-            host="db_service",
-            user="python_api",
-            password="1234",
-            database="users_db",
-            port=3306,
-            cursorclass=pymysql.cursors.DictCursor
-        )        
-    except pymysql.Error as e:
-        printf(f"Niye baglanamadi? {e}")
-
-    auth_sql = "SELECT password FROM users WHERE username=%s;"
-    info_sql = "SELECT user_id, is_premium FROM users WHERE username=%s;"
-
-    try:
-        with connection.cursor() as cursor:
-
-            cursor.execute(auth_sql,(payload.username,))
-
-            if(cursor.rowcount == 0):
-                print(f"User {payload.username} doesn't exists")
-                return {"message": "Username or password is wrong"}            
-
-
-            result = cursor.fetchone()
-
-            if(crypt_context.verify(payload.password, result["password"])):
-
-                print(f"Password auth was successful for {payload.username}")
-
-                cursor.execute(info_sql,(payload.username,))
-
-                result = cursor.fetchone()
-
-                user_id = result["user_id"]
-                is_premium = result["is_premium"]
-            
-            else:
-                return {"message": "Username or password is wrong"}
-            
-
-    except pymysql.Error as e:
-        print(f"query'de hata {e}")
-        return {"message": "Olmadi dayi"}
-
-    finally:
-        connection.close()
+    match auth_return:
+        case 1:
+            print("What?")
+        case 2:
+            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
+        case 3:
+            return {"message": "Username or password is wrong"} 
+        case 4:
+            raise HTTPException(status_code=500, detail="Something wrong with the query")
+        case _:
+            user_id = auth_return['user_id']
+            is_premium = auth_return['is_premium']
 
 
     #

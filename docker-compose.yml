@@ -3,23 +3,12 @@ services:
   # This is the Pytthon API Gateway
   # 
   api_gateway_service:
-    image: python:3.11-slim
+    build: .
+    image: python:for_api_gateway
     container_name: api_gateway
-    working_dir: /app
-  
-    volumes:
-      - ./:/app
 
-    environment:
-      - PYTHONUNBUFFERED=1
-
-    command: >
-      bash -c "pip install --no-cache-dir fastapi uvicorn pydantic requests pymysql passlib passlib[argon2] pyjwt && 
-      uvicorn api_gateway:app --host 0.0.0.0 --port 3131 --reload"
     ports:
       - "3131:3131"
-    depends_on:
-      - llm_service
 
   # 
   # This is our AI Engine running the LLMs, image recognition

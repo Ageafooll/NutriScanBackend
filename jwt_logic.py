@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 #
-#  General json web token logic is implemented here
+#   General json web token logic is implemented here
 # 
 
 SECRET_KEY = "hacklenmek_istiyorum_beni_hackleyin"
@@ -44,6 +44,7 @@ def get_user_by_token(credentials: HTTPAuthorizationCredentials = Depends(securi
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Couldn't validate the token")
 
         return {"user_id": user_id, "is_premium": is_premium}
+        
     except jwt.ExpiredSignatureError as e:
         print(e)
         raise HTTPException(status_code=401, detail="Token is expired")
