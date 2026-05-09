@@ -1,13 +1,25 @@
-from fastapi import FastAPI, APIRouter, HTTPException, status, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, status, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
+from time import sleep
 import requests
 import json
 import pymysql
 
-from database_logic import add_user, authenticate_user, remove_user
 from jwt_logic import create_token, get_user_by_token
+from database_logic import (
+    DatabaseConnectionError, DatabaseError, AccountAlreadyExistsError, AccountNotFoundError,
+    init_db,
+    register_account, authenticate_account, delete_account
+)
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 #
 # Kinds of payloads that our endpoints will accept
@@ -23,11 +35,11 @@ class MealPrompt(BaseModel):
     gram: int
 
 class AuthenticationPayload(BaseModel):
-    username: str
+    mail: str
     password: str
 
 class RemovePayload(BaseModel):
-    username: str
+    mail: str
 
 
 @app.get("/deneme")
@@ -285,76 +297,53 @@ def manage_meal_prompt(user_prompt: MealPrompt):
 #           Following enpoints are about databases
 #           --------------------------------------
 
-#
-# Username and passwords are sent here to create account
-#
+@app.exception_handler(DatabaseError)
+async def database_error_exception_handler(request: Request, exc: DatabaseError):
+    return JSONResponse(
+        status_code=500,
+        content={"message": "An error occurred while processing your request. Please try again later."},
+    )
+
+@app.exception_handler(DatabaseConnectionError)
+async def database_connection_error_handler(request: Request, exc: DatabaseConnectionError):
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Failed to connect to the database. Please try again later."},
+    )
+
+@app.exception_handler(AccountAlreadyExistsError)
+async def account_already_exists_error_handler(request: Request, exc: AccountAlreadyExistsError):
+    return JSONResponse(
+        status_code=400,
+        content={"message": "An account with this email already exists."},
+    )
+
+@app.exception_handler(AccountNotFoundError)
+async def account_not_found_error_handler(request: Request, exc: AccountNotFoundError):
+    return JSONResponse(
+        status_code=404,
+        content={"message": "Account not found."},
+    )
+
 @app.post("/register")
 def manage_register(payload: AuthenticationPayload):
+    register_account(payload.mail, payload.password)
+    return {"message": "Account registered successfully"}
 
-
-    match add_user(payload.username, payload.password):
-        case 1:
-            return {"message": "Created user"}
-        case 2:
-            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
-        case 3:
-            return {"message": f"User {payload.username} already exists"} 
-        case 4:
-            raise HTTPException(status_code=500, detail="Something wrong with the query")
-        case _:
-            return {"what":"what?"}
-    
-
-
-#
-# Username and passwords are sent here for password authentication, and then you claim the token
-#
 @app.post("/login")
 def manage_authentication(payload: AuthenticationPayload):
-
-    #
     # First part is about password authentication, no tokens yet
-    #
+    auth_return = authenticate_account(payload.mail, payload.password)
+    user_id = auth_return['user_id']
+    is_premium = auth_return['has_premium']
 
-    auth_return = authenticate_user(payload.username, payload.password)
-
-    match auth_return:
-        case 1:
-            print("What?")
-        case 2:
-            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
-        case 3:
-            return {"message": "Username or password is wrong"} 
-        case 4:
-            raise HTTPException(status_code=500, detail="Something wrong with the query")
-        case _:
-            user_id = auth_return['user_id']
-            is_premium = auth_return['is_premium']
-
-
-    #
     # We will handle the token in this part
-    #
-
     jwt_payload = {"sub": str(user_id), "is_premium": is_premium}
-
     users_token = create_token(jwt_payload)
+    return {"message": "Login successful", "access_token": users_token, "token_type": "bearer"}
 
-    return {"message": "login successful", "access_token": users_token, "token_type": "bearer"}
 
-
-@app.post("/removeuser")
+@app.post("/removeaccount")
 def manage_authentication(payload: RemovePayload):
-
-
-    match remove_user(payload.username):
-        case 1:
-            return {"message": "Successfully deleted the user"}
-        case 2:
-            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
-        case 3:
-            return {"message": f"User {payload.username} doesn't exists"} 
-        case 4:
-            raise HTTPException(status_code=500, detail="Something wrong with the query")
-        case _:
-            return {"what":"what?"}
+    delete_account(payload.mail)
+    return {"message": "Account removed successfully"}
