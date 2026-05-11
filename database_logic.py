@@ -21,7 +21,7 @@ crypt_context = CryptContext(
 
 
 #
-#   Adding user to database
+#   Adding user to database with hashed and salted password
 #
 def add_user(username: str, password: str):
 
@@ -36,7 +36,7 @@ def add_user(username: str, password: str):
         )        
     except pymysql.Error as e:
         printf(f"Niye baglanamadi? {e}")
-        return 2
+        return -1
 
 
     init_sql = '''CREATE TABLE IF NOT EXISTS users (
@@ -62,7 +62,7 @@ def add_user(username: str, password: str):
 
             if(cursor.rowcount != 0):
                 print(f"User {username} already exists")
-                return 3       
+                return -2       
 
             cursor.execute(insert_sql, (username, hashed_password))
 
@@ -71,7 +71,7 @@ def add_user(username: str, password: str):
 
     except pymysql.Error as e:
         print(f"query'de hata {e}")
-        return 4
+        return -3
 
 
     finally:
@@ -80,7 +80,9 @@ def add_user(username: str, password: str):
     return 1
 
 
-
+#
+# Does password authentication by comparing hashes
+#
 def authenticate_user(username: str, password: str ):
 
     try:
@@ -94,7 +96,7 @@ def authenticate_user(username: str, password: str ):
         )              
     except pymysql.Error as e:
         printf(f"Niye baglanamadi? {e}")
-        return 2
+        return -1
 
     auth_sql = "SELECT password FROM users WHERE username=%s;"
 
@@ -108,7 +110,7 @@ def authenticate_user(username: str, password: str ):
 
             if(cursor.rowcount == 0):
                 print(f"User {username} doesn't exists")
-                return 3           
+                return -2           
 
 
             result = cursor.fetchone()
@@ -125,12 +127,12 @@ def authenticate_user(username: str, password: str ):
                 is_premium = result["is_premium"]
             
             else:
-                return 3
+                return -2
             
 
     except pymysql.Error as e:
         print(f"query'de hata {e}")
-        return 4
+        return -3
 
     finally:
         connection.close()
@@ -139,6 +141,9 @@ def authenticate_user(username: str, password: str ):
     return {"user_id": user_id, "is_premium": is_premium}
 
 
+#
+#  Acaba ne yapiyor
+#
 def remove_user(username: str):
 
     try:
@@ -152,7 +157,7 @@ def remove_user(username: str):
         )              
     except pymysql.Error as e:
         printf(f"Niye baglanamadi? {e}")
-        return 2
+        return -1
     
     check_sql = "SELECT username FROM users WHERE username=%s;"
 
@@ -165,7 +170,7 @@ def remove_user(username: str):
 
             if(cursor.rowcount == 0):
                 print(f"User {username} doesn't exists")
-                return 3       
+                return -2       
 
             cursor.execute(remove_sql, (username,))
 
@@ -174,7 +179,7 @@ def remove_user(username: str):
 
     except pymysql.Error as e:
         print(f"query'de hata {e}")
-        return 4
+        return -3
 
 
     finally:
