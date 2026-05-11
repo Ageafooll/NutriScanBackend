@@ -201,7 +201,11 @@ def send_image_prompt(base64Image: str):
 #
 def send_diet_prompt(goal: str):
 
-    #Lütfen sövmeyin
+
+    #
+    # Sends the diet program as 7(days) x 3(meals) 2D array of json objects
+    #
+
     ai_payload = {
         "model": MODEL,
 
@@ -219,285 +223,44 @@ def send_diet_prompt(goal: str):
         "stream": False,
         "format": {
             "type": "object",
-
             "properties": 
             {
-                "sunday": 
+                "days": 
                 {
-                    "type": "object",
-                    "properties": 
-                    {
-                        "name": 
-                        {
-                            "type": "string",
-                            "description": "Name of the meal"
-                        },
-                        "gram": 
-                        {
-                            "type": "integer",
-                            "description": "Meals weight in gram"
-                        },
-                        "calories":
-                        {
-                            "type": "integer",
-                            "description": "Calories in kcal"
-                        },
-                        "proteins": 
-                        {
-                            "type": "integer",
-                            "description": "Protein content in grams"
-                        },
-                        "carbohydrates": 
-                        {
-                            "type": "integer",
-                            "description": "Carbohydrate content in grams"
-                        },
-                        "fats": 
-                        {
-                            "type": "integer",
-                            "description": "Fat content in grams"
-                        }
-                    },
-                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
-                },
+                    "type":"array",
+                    "description": "A list of 7 days of the week",
+                    "minItems": 7,
+                    "maxItems": 7,
 
-                "monday": 
-                {
-                    "type": "object",
-                    "properties": 
+                    "items":
                     {
-                        "name": 
-                        {
-                            "type": "string",
-                            "description": "Name of the meal"
-                        },
-                        "gram": 
-                        {
-                            "type": "integer",
-                            "description": "Meals weight in gram"
-                        },
-                        "calories":
-                        {
-                            "type": "integer",
-                            "description": "Calories in kcal"
-                        },
-                        "proteins": 
-                        {
-                            "type": "integer",
-                            "description": "Protein content in grams"
-                        },
-                        "carbohydrates": 
-                        {
-                            "type": "integer",
-                            "description": "Carbohydrate content in grams"
-                        },
-                        "fats": 
-                        {
-                            "type": "integer",
-                            "description": "Fat content in grams"
-                        }
-                    },
-                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
-                },
+                        "type":"array",
+                        "description": "A list 3 meals of the day",
+                        "minItems": 3,
+                        "maxItems": 3,
 
-                "tuesday": 
-                {
-                    "type": "object",
-                    "properties": 
-                    {
-                        "name": 
+                        "items":
                         {
-                            "type": "string",
-                            "description": "Name of the meal"
-                        },
-                        "gram": 
-                        {
-                            "type": "integer",
-                            "description": "Meals weight in gram"
-                        },
-                        "calories":
-                        {
-                            "type": "integer",
-                            "description": "Calories in kcal"
-                        },
-                        "proteins": 
-                        {
-                            "type": "integer",
-                            "description": "Protein content in grams"
-                        },
-                        "carbohydrates": 
-                        {
-                            "type": "integer",
-                            "description": "Carbohydrate content in grams"
-                        },
-                        "fats": 
-                        {
-                            "type": "integer",
-                            "description": "Fat content in grams"
+                            "type":"object",
+                            "properties": 
+                            {
+                                "food_name": {"type": "string", "description": "The name of the suggested food"},
+                                "gram": {"type": "integer", "description": "The meals estimated weight in grams"},
+                                "calories": {"type": "integer","description": "Calories in kcal"},
+                                "proteins": {"type": "integer", "description": "Protein content in grams"},
+                                "carbohydrates": {"type": "integer","description": "Carbohydrate content in grams"},
+                                "fats": {"type": "integer","description": "Fat content in grams"}
+                            },
+                            "required": ["food_name", "gram", "calories", "proteins", "carbohydrates", "fats"]
                         }
-                    },
-                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
-                },
 
-                "wednesday": 
-                {
-                    "type": "object",
-                    "properties": 
-                    {
-                        "name": 
-                        {
-                            "type": "string",
-                            "description": "Name of the meal"
-                        },
-                        "gram": 
-                        {
-                            "type": "integer",
-                            "description": "Meals weight in gram"
-                        },
-                        "calories":
-                        {
-                            "type": "integer",
-                            "description": "Calories in kcal"
-                        },
-                        "proteins": 
-                        {
-                            "type": "integer",
-                            "description": "Protein content in grams"
-                        },
-                        "carbohydrates": 
-                        {
-                            "type": "integer",
-                            "description": "Carbohydrate content in grams"
-                        },
-                        "fats": 
-                        {
-                            "type": "integer",
-                            "description": "Fat content in grams"
-                        }
-                    },
-                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
-                },
+                    }
 
-                "thursday": 
-                {
-                    "type": "object",
-                    "properties": 
-                    {
-                        "name": 
-                        {
-                            "type": "string",
-                            "description": "Name of the meal"
-                        },
-                        "gram": 
-                        {
-                            "type": "integer",
-                            "description": "Meals weight in gram"
-                        },
-                        "calories":
-                        {
-                            "type": "integer",
-                            "description": "Calories in kcal"
-                        },
-                        "proteins": 
-                        {
-                            "type": "integer",
-                            "description": "Protein content in grams"
-                        },
-                        "carbohydrates": 
-                        {
-                            "type": "integer",
-                            "description": "Carbohydrate content in grams"
-                        },
-                        "fats": 
-                        {
-                            "type": "integer",
-                            "description": "Fat content in grams"
-                        }
-                    },
-                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
-                },
-
-                "friday": 
-                {
-                    "type": "object",
-                    "properties": 
-                    {
-                        "name": 
-                        {
-                            "type": "string",
-                            "description": "Name of the meal"
-                        },
-                        "gram": 
-                        {
-                            "type": "integer",
-                            "description": "Meals weight in gram"
-                        },
-                        "calories":
-                        {
-                            "type": "integer",
-                            "description": "Calories in kcal"
-                        },
-                        "proteins": 
-                        {
-                            "type": "integer",
-                            "description": "Protein content in grams"
-                        },
-                        "carbohydrates": 
-                        {
-                            "type": "integer",
-                            "description": "Carbohydrate content in grams"
-                        },
-                        "fats": 
-                        {
-                            "type": "integer",
-                            "description": "Fat content in grams"
-                        }
-                    },
-                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
-                },
-
-                "saturday": 
-                {
-                    "type": "object",
-                    "properties": 
-                    {
-                        "name": 
-                        {
-                            "type": "string",
-                            "description": "Name of the meal"
-                        },
-                        "gram": 
-                        {
-                            "type": "integer",
-                            "description": "Meals weight in gram"
-                        },
-                        "calories":
-                        {
-                            "type": "integer",
-                            "description": "Calories in kcal"
-                        },
-                        "proteins": 
-                        {
-                            "type": "integer",
-                            "description": "Protein content in grams"
-                        },
-                        "carbohydrates": 
-                        {
-                            "type": "integer",
-                            "description": "Carbohydrate content in grams"
-                        },
-                        "fats": 
-                        {
-                            "type": "integer",
-                            "description": "Fat content in grams"
-                        }
-                    },
-                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
                 }
-
             },
 
-            "required": ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+            "required": ["days"]
+
         }
     }
 
