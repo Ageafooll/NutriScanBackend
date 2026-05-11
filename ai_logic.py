@@ -194,3 +194,325 @@ def send_image_prompt(base64Image: str):
     print(f"Got the final response: {final_output}")
 
     return final_output
+
+
+#
+# Sending goal to get a diet plan accordingly
+#
+def send_diet_prompt(goal: str):
+
+    #Lütfen sövmeyin
+    ai_payload = {
+        "model": MODEL,
+
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a nutritionist. Send a 7 days of meal diet plan according to users goal. Send meal names and macros"
+            },
+            {
+                "role": "user",
+                "content": f"Users goal is {goal}."
+            } 
+        ],
+
+        "stream": False,
+        "format": {
+            "type": "object",
+
+            "properties": 
+            {
+                "sunday": 
+                {
+                    "type": "object",
+                    "properties": 
+                    {
+                        "name": 
+                        {
+                            "type": "string",
+                            "description": "Name of the meal"
+                        },
+                        "gram": 
+                        {
+                            "type": "integer",
+                            "description": "Meals weight in gram"
+                        },
+                        "calories":
+                        {
+                            "type": "integer",
+                            "description": "Calories in kcal"
+                        },
+                        "proteins": 
+                        {
+                            "type": "integer",
+                            "description": "Protein content in grams"
+                        },
+                        "carbohydrates": 
+                        {
+                            "type": "integer",
+                            "description": "Carbohydrate content in grams"
+                        },
+                        "fats": 
+                        {
+                            "type": "integer",
+                            "description": "Fat content in grams"
+                        }
+                    },
+                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                },
+
+                "monday": 
+                {
+                    "type": "object",
+                    "properties": 
+                    {
+                        "name": 
+                        {
+                            "type": "string",
+                            "description": "Name of the meal"
+                        },
+                        "gram": 
+                        {
+                            "type": "integer",
+                            "description": "Meals weight in gram"
+                        },
+                        "calories":
+                        {
+                            "type": "integer",
+                            "description": "Calories in kcal"
+                        },
+                        "proteins": 
+                        {
+                            "type": "integer",
+                            "description": "Protein content in grams"
+                        },
+                        "carbohydrates": 
+                        {
+                            "type": "integer",
+                            "description": "Carbohydrate content in grams"
+                        },
+                        "fats": 
+                        {
+                            "type": "integer",
+                            "description": "Fat content in grams"
+                        }
+                    },
+                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                },
+
+                "tuesday": 
+                {
+                    "type": "object",
+                    "properties": 
+                    {
+                        "name": 
+                        {
+                            "type": "string",
+                            "description": "Name of the meal"
+                        },
+                        "gram": 
+                        {
+                            "type": "integer",
+                            "description": "Meals weight in gram"
+                        },
+                        "calories":
+                        {
+                            "type": "integer",
+                            "description": "Calories in kcal"
+                        },
+                        "proteins": 
+                        {
+                            "type": "integer",
+                            "description": "Protein content in grams"
+                        },
+                        "carbohydrates": 
+                        {
+                            "type": "integer",
+                            "description": "Carbohydrate content in grams"
+                        },
+                        "fats": 
+                        {
+                            "type": "integer",
+                            "description": "Fat content in grams"
+                        }
+                    },
+                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                },
+
+                "wednesday": 
+                {
+                    "type": "object",
+                    "properties": 
+                    {
+                        "name": 
+                        {
+                            "type": "string",
+                            "description": "Name of the meal"
+                        },
+                        "gram": 
+                        {
+                            "type": "integer",
+                            "description": "Meals weight in gram"
+                        },
+                        "calories":
+                        {
+                            "type": "integer",
+                            "description": "Calories in kcal"
+                        },
+                        "proteins": 
+                        {
+                            "type": "integer",
+                            "description": "Protein content in grams"
+                        },
+                        "carbohydrates": 
+                        {
+                            "type": "integer",
+                            "description": "Carbohydrate content in grams"
+                        },
+                        "fats": 
+                        {
+                            "type": "integer",
+                            "description": "Fat content in grams"
+                        }
+                    },
+                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                },
+
+                "thursday": 
+                {
+                    "type": "object",
+                    "properties": 
+                    {
+                        "name": 
+                        {
+                            "type": "string",
+                            "description": "Name of the meal"
+                        },
+                        "gram": 
+                        {
+                            "type": "integer",
+                            "description": "Meals weight in gram"
+                        },
+                        "calories":
+                        {
+                            "type": "integer",
+                            "description": "Calories in kcal"
+                        },
+                        "proteins": 
+                        {
+                            "type": "integer",
+                            "description": "Protein content in grams"
+                        },
+                        "carbohydrates": 
+                        {
+                            "type": "integer",
+                            "description": "Carbohydrate content in grams"
+                        },
+                        "fats": 
+                        {
+                            "type": "integer",
+                            "description": "Fat content in grams"
+                        }
+                    },
+                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                },
+
+                "friday": 
+                {
+                    "type": "object",
+                    "properties": 
+                    {
+                        "name": 
+                        {
+                            "type": "string",
+                            "description": "Name of the meal"
+                        },
+                        "gram": 
+                        {
+                            "type": "integer",
+                            "description": "Meals weight in gram"
+                        },
+                        "calories":
+                        {
+                            "type": "integer",
+                            "description": "Calories in kcal"
+                        },
+                        "proteins": 
+                        {
+                            "type": "integer",
+                            "description": "Protein content in grams"
+                        },
+                        "carbohydrates": 
+                        {
+                            "type": "integer",
+                            "description": "Carbohydrate content in grams"
+                        },
+                        "fats": 
+                        {
+                            "type": "integer",
+                            "description": "Fat content in grams"
+                        }
+                    },
+                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                },
+
+                "saturday": 
+                {
+                    "type": "object",
+                    "properties": 
+                    {
+                        "name": 
+                        {
+                            "type": "string",
+                            "description": "Name of the meal"
+                        },
+                        "gram": 
+                        {
+                            "type": "integer",
+                            "description": "Meals weight in gram"
+                        },
+                        "calories":
+                        {
+                            "type": "integer",
+                            "description": "Calories in kcal"
+                        },
+                        "proteins": 
+                        {
+                            "type": "integer",
+                            "description": "Protein content in grams"
+                        },
+                        "carbohydrates": 
+                        {
+                            "type": "integer",
+                            "description": "Carbohydrate content in grams"
+                        },
+                        "fats": 
+                        {
+                            "type": "integer",
+                            "description": "Fat content in grams"
+                        }
+                    },
+                    "required": ["name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                }
+
+            },
+
+            "required": ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+        }
+    }
+
+    response = requests.post(URL, json=ai_payload).json()
+
+    diet_output = response["message"]["content"]
+
+    print(f"Got the diet output: {diet_output}")
+
+    try:
+        final_output = json.loads(diet_output)
+    except json.JSONDecodeError:
+        print("AI returned the wrong structure")
+        return -1
+
+    print(f"Got the final response: {final_output}")
+
+    return final_output

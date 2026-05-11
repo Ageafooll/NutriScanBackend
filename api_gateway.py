@@ -4,7 +4,7 @@ import requests
 import json
 import pymysql
 
-from ai_logic import send_chat_prompt, send_meal_prompt, send_image_prompt
+from ai_logic import send_chat_prompt, send_meal_prompt, send_image_prompt, send_diet_prompt
 from database_logic import add_user, authenticate_user, remove_user
 from jwt_logic import create_token, get_user_by_token
 
@@ -22,6 +22,9 @@ class ImagePrompt(BaseModel):
 class MealPrompt(BaseModel):
     name: str
     gram: int
+
+class DietPrompt(BaseModel):
+    goal: str
 
 class AuthenticationPayload(BaseModel):
     username: str
@@ -95,6 +98,21 @@ def manage_image_prompt(user_prompt: ImagePrompt):
         return final_response
 
 
+
+#
+# Goal is sent here to get diet plan
+#
+@app.post("/diet")
+def manage_diet_prompt(user_prompt: DietPrompt):
+
+    print(f"Got the user goal: {user_prompt.goal}")
+
+    final_response = send_diet_prompt(user_prompt.goal)
+
+    if (final_response == -1):
+        raise HTTPException(status_code=500, detail="AI made a mistake")
+    else:
+        return final_response
 
 
 #           --------------------------------------
