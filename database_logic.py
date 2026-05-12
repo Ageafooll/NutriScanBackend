@@ -1,6 +1,10 @@
+from datetime import date
+import json
+
 import pymysql
 from passlib.context import CryptContext
 from time import sleep
+from schemas import AuthenticationPayload, ProfileUpdatePayload, FoodLogPayload, WaterLogPayload, WeightLogPayload
 
 #DB variables
 HOST = "db_service"
@@ -25,7 +29,7 @@ SCHEMA = """
         user_id INT AUTO_INCREMENT PRIMARY KEY,
         mail VARCHAR(255) UNIQUE,
         password VARCHAR(255),
-        has_premium INT
+        has_premium BOOLEAN DEFAULT FALSE
     );
 
     CREATE TABLE IF NOT EXISTS user_profiles (
@@ -39,6 +43,15 @@ SCHEMA = """
         target_weight INT, -- kg
         activity_level VARCHAR(20), -- SEDENTARY, LIGHTLY_ACTIVE, ACTIVE, VERY_ACTIVE
         goal_type VARCHAR(20), -- LOSE_WEIGHT, MAINTAIN_WEIGHT, GAIN_WEIGHT, GAIN_MUSCLE
+
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_restrictions (
+        restriction_id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        restriction_type VARCHAR(20), -- ALLERGY, PREFERENCE
+        restriction_value VARCHAR(255),
 
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     );
@@ -70,15 +83,26 @@ SCHEMA = """
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS weightlogs (
+        weightlog_id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        weight INT, -- kg
+        date DATE,
+        log_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS diet_program (
         diet_id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT,
         start_date DATE,
         end_date DATE,
-        total_calories INT,
-        total_protein INT,
-        total_carbs INT,
-        total_fat INT
+        target_calories INT,
+        target_protein INT,
+        target_carbs INT,
+        target_fat INT,
+        goal_type VARCHAR(20) -- LOSE_WEIGHT, MAINTAIN_WEIGHT, GAIN_WEIGHT, GAIN_MUSCLE
     );
 
     CREATE TABLE IF NOT EXISTS diet_meals (
@@ -104,13 +128,11 @@ class DatabaseError(Exception):
 class DatabaseConnectionError(Exception):
     pass
 
-class AccountAlreadyExistsError(DatabaseError):
-    def __init__(self, mail):
-        super().__init__(f"An account with mail {mail} already exists.")
+class DatabaseAlreadyExistsError(DatabaseError):
+    pass
 
-class AccountNotFoundError(DatabaseError):
-    def __init__(self, mail):
-        super().__init__(f"No account found with mail {mail}.")
+class DatabaseNotFoundError(DatabaseError):
+    pass
 
 def get_connection():
     retries = 10
@@ -151,24 +173,24 @@ def init_db():
     finally:
         conn.close()
 
-def register_account(mail: str, password: str):
+def register_account(payload: AuthenticationPayload):
     conn = get_connection()
     
     try:
         with conn.cursor() as cur:
-            hashed_password = crypt_context.hash(password)
+            hashed_password = crypt_context.hash(payload.password)
 
-            cur.execute("SELECT mail FROM users WHERE mail=%s;", (mail,))
+            cur.execute("SELECT mail FROM users WHERE mail=%s;", (payload.mail,))
             if cur.rowcount != 0:
-                raise AccountAlreadyExistsError(mail)
+                raise DatabaseAlreadyExistsError(f"An account with mail {payload.mail} already exists")
             
             cur.execute(
-                "INSERT IGNORE INTO users (mail, password, has_premium) VALUES (%s, %s, 0);",
-                (mail, hashed_password)
+                "INSERT IGNORE INTO users (mail, password) VALUES (%s, %s);",
+                (payload.mail, hashed_password)
             )
 
         conn.commit()
-        print(f"Account registered successfully for {mail}")
+        print(f"Account registered successfully for {payload.mail}")
         return 0
     
     except pymysql.Error as e:
@@ -179,21 +201,21 @@ def register_account(mail: str, password: str):
         conn.close()
 
 
-def authenticate_account(mail: str, password: str):
+def authenticate_account(payload: AuthenticationPayload):
     conn = get_connection()
     
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT user_id, password, has_premium FROM users WHERE mail=%s;", (mail,))
+            cur.execute("SELECT user_id, password, has_premium FROM users WHERE mail=%s;", (payload.mail,))
             result = cur.fetchone()
             if not result:
-                raise AccountNotFoundError(mail)
+                raise DatabaseNotFoundError(f"No account found with mail {payload.mail}.")
             
-            if crypt_context.verify(password, result["password"]):
-                print(f"Authentication successful for {mail}")
+            if crypt_context.verify(payload.password, result["password"]):
+                print(f"Authentication successful for {payload.mail}")
                 return {"user_id": result["user_id"], "has_premium": result["has_premium"]}
             else:
-                print(f"Authentication failed for {mail}")
+                print(f"Authentication failed for {payload.mail}")
                 return None
     
     except pymysql.Error as e:
@@ -203,19 +225,19 @@ def authenticate_account(mail: str, password: str):
     finally:
         conn.close()
 
-def delete_account(mail: str):
+def delete_account(user_id: int):
     conn = get_connection()
     
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE mail=%s;", (mail,))
+            cur.execute("SELECT * FROM users WHERE user_id=%s;", (user_id,))
             if cur.rowcount == 0:
-                raise AccountNotFoundError(mail)
+                raise DatabaseNotFoundError(f"User not found for user_id {user_id}")
             
-            cur.execute("DELETE FROM users WHERE mail=%s;", (mail,))
+            cur.execute("DELETE FROM users WHERE user_id=%s;", (user_id,))
 
         conn.commit()
-        print(f"Account deleted successfully for {mail}")
+        print(f"Account deleted successfully for user_id {user_id}")
     
     except pymysql.Error as e:
         print(f"Database error during account deletion: {e}")
@@ -232,7 +254,7 @@ def get_user_profile(user_id: int):
             cur.execute("SELECT * FROM user_profiles WHERE user_id=%s;", (user_id,))
             result = cur.fetchone()
             if not result:
-                raise DatabaseError(f"No profile found for user_id {user_id}")
+                raise DatabaseNotFoundError(f"No profile found for user_id {user_id}")
             
             print(f"Profile retrieved successfully for user_id {user_id}")
             return result
@@ -244,7 +266,7 @@ def get_user_profile(user_id: int):
     finally:
         conn.close()
 
-def update_user_profile(user_id: int, name: str, sex: str, birth_date: str, height: int, weight: int, target_weight: int, activity_level: str, goal_type: str):
+def update_user_profile(user_id: int, p: ProfileUpdatePayload):
     conn = get_connection()
 
     try:
@@ -256,7 +278,7 @@ def update_user_profile(user_id: int, name: str, sex: str, birth_date: str, heig
                     (user_id, name, sex, birth_date, height, weight, target_weight, activity_level, goal_type)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
                     """,
-                    (user_id, name, sex, birth_date, height, weight, target_weight, activity_level, goal_type)
+                    (user_id, p.name, p.sex, p.birth_date, p.height, p.weight, p.target_weight, p.activity_level, p.goal_type)
                 )
             else:
                 cur.execute(
@@ -265,7 +287,7 @@ def update_user_profile(user_id: int, name: str, sex: str, birth_date: str, heig
                     SET name=%s, sex=%s, birth_date=%s, height=%s, weight=%s, target_weight=%s, activity_level=%s, goal_type=%s
                     WHERE user_id=%s;
                     """,
-                    (name, sex, birth_date, height, weight, target_weight, activity_level, goal_type, user_id)
+                    (p.name, p.sex, p.birth_date, p.height, p.weight, p.target_weight, p.activity_level, p.goal_type, user_id)
                 )
 
         conn.commit()
@@ -278,4 +300,183 @@ def update_user_profile(user_id: int, name: str, sex: str, birth_date: str, heig
     finally:
         conn.close()
 
+def get_food_logs(user_id: int, log_date: date):
+    conn = get_connection()
 
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM foodlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            results = cur.fetchall()
+            print(f"Food log retrieved successfully for user_id {user_id} on {log_date}")
+            return results
+
+    except pymysql.Error as e:
+        print(f"Database error during food log retrieval: {e}")
+        raise DatabaseError(f"Failed to retrieve food log: {e}")
+
+    finally:
+        conn.close()
+
+def add_food_log(user_id: int, p: FoodLogPayload):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO foodlogs
+                (user_id, food_name, calories, protein, carbs, fat, micros, serving_size, meal_type, date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                """,
+                (user_id, p.name, p.calories, p.proteins, p.carbohydrates, p.fats, 
+                 json.dumps(p.micronutrients), p.serving_size, p.meal_type, p.log_date)
+            )
+        conn.commit()
+        print(f"Food log added successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during food log addition: {e}")
+        raise DatabaseError(f"Failed to add food log: {e}")
+    
+    finally:
+        conn.close()
+
+def delete_food_log(foodlog_id: int, user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM foodlogs WHERE foodlog_id=%s AND user_id=%s;", (foodlog_id, user_id))
+            if cur.rowcount == 0:
+                raise DatabaseNotFoundError(f"No food log found with id {foodlog_id} for user_id {user_id}")
+            
+            cur.execute("DELETE FROM foodlogs WHERE foodlog_id=%s AND user_id=%s;", (foodlog_id, user_id))
+        conn.commit()
+        print(f"Food log with id {foodlog_id} deleted successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during food log deletion: {e}")
+        raise DatabaseError(f"Failed to delete food log: {e}")
+
+    finally:
+        conn.close()
+
+def get_water_logs(user_id: int, log_date: date):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM waterlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            results = cur.fetchall()
+            print(f"Water log retrieved successfully for user_id {user_id} on {log_date}")
+            return results
+
+    except pymysql.Error as e:
+        print(f"Database error during water log retrieval: {e}")
+        raise DatabaseError(f"Failed to retrieve water log: {e}")
+
+    finally:
+        conn.close()
+
+def add_water_log(user_id: int, payload: WaterLogPayload):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO waterlogs
+                (user_id, amount, date)
+                VALUES (%s, %s, %s);
+                """,
+                (user_id, payload.amount, payload.log_date)
+            )
+        conn.commit()
+        print(f"Water log added successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during water log addition: {e}")
+        raise DatabaseError(f"Failed to add water log: {e}")
+    
+    finally:
+        conn.close()
+
+def delete_water_log(waterlog_id: int, user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM waterlogs WHERE waterlog_id=%s AND user_id=%s;", (waterlog_id, user_id))
+            if cur.rowcount == 0:
+                raise DatabaseNotFoundError(f"No water log found with id {waterlog_id} for user_id {user_id}")
+            
+            cur.execute("DELETE FROM waterlogs WHERE waterlog_id=%s AND user_id=%s;", (waterlog_id, user_id))
+        conn.commit()
+        print(f"Water log with id {waterlog_id} deleted successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during water log deletion: {e}")
+        raise DatabaseError(f"Failed to delete water log: {e}")
+
+    finally:
+        conn.close()
+
+def get_weight_logs(user_id: int, log_date: date):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM weightlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            results = cur.fetchall()
+            print(f"Weight log retrieved successfully for user_id {user_id} on {log_date}")
+            return results
+
+    except pymysql.Error as e:
+        print(f"Database error during weight log retrieval: {e}")
+        raise DatabaseError(f"Failed to retrieve weight log: {e}")
+
+    finally:
+        conn.close()
+
+def add_weight_log(user_id: int, payload: WeightLogPayload):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO weightlogs
+                (user_id, weight, date)
+                VALUES (%s, %s, %s);
+                """,
+                (user_id, payload.weight, payload.log_date)
+            )
+        conn.commit()
+        print(f"Weight log added successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during weight log addition: {e}")
+        raise DatabaseError(f"Failed to add weight log: {e}")
+    
+    finally:
+        conn.close()
+
+def delete_weight_log(weightlog_id: int, user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM weightlogs WHERE weightlog_id=%s AND user_id=%s;", (weightlog_id, user_id))
+            if cur.rowcount == 0:
+                raise DatabaseNotFoundError(f"No weight log found with id {weightlog_id} for user_id {user_id}")
+            
+            cur.execute("DELETE FROM weightlogs WHERE weightlog_id=%s AND user_id=%s;", (weightlog_id, user_id))
+        conn.commit()
+        print(f"Weight log with id {weightlog_id} deleted successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during weight log deletion: {e}")
+        raise DatabaseError(f"Failed to delete weight log: {e}")
+
+    finally:
+        conn.close()

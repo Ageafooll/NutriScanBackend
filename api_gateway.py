@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import FastAPI, APIRouter, HTTPException, status, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -6,12 +8,17 @@ from time import sleep
 import requests
 import json
 import pymysql
+from schemas import ChatPrompt, FoodLogPayload, ImagePrompt, MealPrompt, AuthenticationPayload, ProfileUpdatePayload, WaterLogPayload, WeightLogPayload
 
 from jwt_logic import create_token, get_user_by_token
 from database_logic import (
-    DatabaseConnectionError, DatabaseError, AccountAlreadyExistsError, AccountNotFoundError,
+    DatabaseConnectionError, DatabaseError, DatabaseAlreadyExistsError, DatabaseNotFoundError, 
     init_db,
-    register_account, authenticate_account, delete_account
+    register_account, authenticate_account, delete_account,
+    update_user_profile, get_user_profile,
+    add_food_log, delete_food_log, get_food_logs,
+    add_water_log, delete_water_log, get_water_logs, 
+    add_weight_log, delete_weight_log, get_weight_logs
 )
 
 @asynccontextmanager
@@ -20,27 +27,6 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
-
-#
-# Kinds of payloads that our endpoints will accept
-#
-class ChatPrompt(BaseModel):
-    prompt: str
-
-class ImagePrompt(BaseModel):
-    base64Image: str
-
-class MealPrompt(BaseModel):
-    name: str
-    gram: int
-
-class AuthenticationPayload(BaseModel):
-    mail: str
-    password: str
-
-class RemovePayload(BaseModel):
-    mail: str
-
 
 @app.get("/deneme")
 def deneme(current_user: dict = Depends(get_user_by_token)):
@@ -311,29 +297,29 @@ async def database_connection_error_handler(request: Request, exc: DatabaseConne
         content={"message": "Failed to connect to the database. Please try again later."},
     )
 
-@app.exception_handler(AccountAlreadyExistsError)
-async def account_already_exists_error_handler(request: Request, exc: AccountAlreadyExistsError):
+@app.exception_handler(DatabaseAlreadyExistsError)
+async def database_already_exists_error_handler(request: Request, exc: DatabaseAlreadyExistsError):
     return JSONResponse(
         status_code=400,
-        content={"message": "An account with this email already exists."},
+        content={"message": "A record with this identifier already exists."},
     )
 
-@app.exception_handler(AccountNotFoundError)
-async def account_not_found_error_handler(request: Request, exc: AccountNotFoundError):
+@app.exception_handler(DatabaseNotFoundError)
+async def database_not_found_error_handler(request: Request, exc: DatabaseNotFoundError):
     return JSONResponse(
         status_code=404,
-        content={"message": "Account not found."},
+        content={"message": "Record not found."},
     )
 
-@app.post("/register")
+@app.post("/auth/register")
 def manage_register(payload: AuthenticationPayload):
-    register_account(payload.mail, payload.password)
+    register_account(payload)
     return {"message": "Account registered successfully"}
 
-@app.post("/login")
-def manage_authentication(payload: AuthenticationPayload):
+@app.post("/auth/login")
+def manage_login(payload: AuthenticationPayload):
     # First part is about password authentication, no tokens yet
-    auth_return = authenticate_account(payload.mail, payload.password)
+    auth_return = authenticate_account(payload)
     user_id = auth_return['user_id']
     is_premium = auth_return['has_premium']
 
@@ -342,8 +328,58 @@ def manage_authentication(payload: AuthenticationPayload):
     users_token = create_token(jwt_payload)
     return {"message": "Login successful", "access_token": users_token, "token_type": "bearer"}
 
-
-@app.post("/removeaccount")
-def manage_authentication(payload: RemovePayload):
-    delete_account(payload.mail)
+@app.delete("/users/me/remove")
+def manage_remove_account(current_user: dict = Depends(get_user_by_token)):
+    delete_account(current_user["user_id"])
     return {"message": "Account removed successfully"}
+
+@app.post("/users/me/profile")
+def manage_update_profile(payload: ProfileUpdatePayload, current_user: dict = Depends(get_user_by_token)):
+    update_user_profile(current_user["user_id"], payload)
+    return {"message": "Profile updated successfully"}
+
+@app.get("/users/me/profile")
+def manage_get_profile(current_user: dict = Depends(get_user_by_token)):
+    return get_user_profile(current_user["user_id"])
+
+@app.get("/logs/food/{log_date}")
+def manage_get_food_logs(log_date: date, current_user: dict = Depends(get_user_by_token)):
+    return get_food_logs(current_user["user_id"], log_date)
+
+@app.post("/logs/food")
+def manage_add_food_log(payload: FoodLogPayload, current_user: dict = Depends(get_user_by_token)):
+    add_food_log(current_user["user_id"], payload)
+    return {"message": "Food log added successfully"}
+
+@app.delete("/logs/food/{foodlog_id}")
+def manage_delete_food_log(foodlog_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_food_log(foodlog_id, current_user["user_id"])
+    return {"message": "Food log deleted successfully"}
+
+@app.get("/logs/water/{log_date}")
+def manage_get_water_logs(log_date: date, current_user: dict = Depends(get_user_by_token)):
+    return get_water_logs(current_user["user_id"], log_date)
+
+@app.post("/logs/water")
+def manage_add_water_log(payload: WaterLogPayload, current_user: dict = Depends(get_user_by_token)):
+    add_water_log(current_user["user_id"], payload)
+    return {"message": "Water log added successfully"}
+
+@app.delete("/logs/water/{waterlog_id}")
+def manage_delete_water_log(waterlog_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_water_log(waterlog_id, current_user["user_id"])
+    return {"message": "Water log deleted successfully"}
+
+@app.get("/logs/weight/{log_date}")
+def manage_get_weight_logs(log_date: date, current_user: dict = Depends(get_user_by_token)):
+    return get_weight_logs(current_user["user_id"], log_date)
+
+@app.post("/logs/weight")
+def manage_add_weight_log(payload: WeightLogPayload, current_user: dict = Depends(get_user_by_token)):
+    add_weight_log(current_user["user_id"], payload)
+    return {"message": "Weight log added successfully"}
+
+@app.delete("/logs/weight/{weightlog_id}")
+def manage_delete_weight_log(weightlog_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_weight_log(weightlog_id, current_user["user_id"])
+    return {"message": "Weight log deleted successfully"}
