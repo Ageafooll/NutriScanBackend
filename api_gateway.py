@@ -1,5 +1,5 @@
 from datetime import date
-
+from typing import List
 from fastapi import FastAPI, APIRouter, HTTPException, status, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -8,14 +8,15 @@ from time import sleep
 import requests
 import json
 import pymysql
-from schemas import ChatPrompt, FoodLogPayload, ImagePrompt, MealPrompt, AuthenticationPayload, ProfileUpdatePayload, WaterLogPayload, WeightLogPayload
+from schemas import ChatPrompt, FoodLogPayload, ImagePrompt, MealPrompt, AuthenticationPayload, ProfileUpdatePayload, UserRestrictionPayload, WaterLogPayload, WeightLogPayload
 
 from jwt_logic import create_token, get_user_by_token
 from database_logic import (
-    DatabaseConnectionError, DatabaseError, DatabaseAlreadyExistsError, DatabaseNotFoundError, 
+    DatabaseConnectionError, DatabaseError, DatabaseAlreadyExistsError, DatabaseNotFoundError,
     init_db,
     register_account, authenticate_account, delete_account,
     update_user_profile, get_user_profile,
+    add_user_restriction, delete_user_restriction, get_user_restrictions,
     add_food_log, delete_food_log, get_food_logs,
     add_water_log, delete_water_log, get_water_logs, 
     add_weight_log, delete_weight_log, get_weight_logs
@@ -342,8 +343,23 @@ def manage_update_profile(payload: ProfileUpdatePayload, current_user: dict = De
 def manage_get_profile(current_user: dict = Depends(get_user_by_token)):
     return get_user_profile(current_user["user_id"])
 
-@app.get("/logs/food/{log_date}")
-def manage_get_food_logs(log_date: date, current_user: dict = Depends(get_user_by_token)):
+@app.get("/users/me/restrictions")
+def manage_get_restrictions(current_user: dict = Depends(get_user_by_token)):
+    return get_user_restrictions(current_user["user_id"])
+
+@app.post("/users/me/restrictions")
+def manage_add_restrictions(payloads: List[UserRestrictionPayload], current_user: dict = Depends(get_user_by_token)):
+    for payload in payloads:
+        add_user_restriction(current_user["user_id"], payload)
+    return {"message": "Restrictions added successfully"}
+
+@app.delete("/users/me/restrictions/{restriction_id}")
+def manage_delete_restriction(restriction_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_user_restriction(restriction_id, current_user["user_id"])
+    return {"message": "Restriction deleted successfully"}
+
+@app.get("/logs/food")
+def manage_get_food_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
     return get_food_logs(current_user["user_id"], log_date)
 
 @app.post("/logs/food")
@@ -356,8 +372,8 @@ def manage_delete_food_log(foodlog_id: int, current_user: dict = Depends(get_use
     delete_food_log(foodlog_id, current_user["user_id"])
     return {"message": "Food log deleted successfully"}
 
-@app.get("/logs/water/{log_date}")
-def manage_get_water_logs(log_date: date, current_user: dict = Depends(get_user_by_token)):
+@app.get("/logs/water")
+def manage_get_water_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
     return get_water_logs(current_user["user_id"], log_date)
 
 @app.post("/logs/water")
@@ -370,8 +386,8 @@ def manage_delete_water_log(waterlog_id: int, current_user: dict = Depends(get_u
     delete_water_log(waterlog_id, current_user["user_id"])
     return {"message": "Water log deleted successfully"}
 
-@app.get("/logs/weight/{log_date}")
-def manage_get_weight_logs(log_date: date, current_user: dict = Depends(get_user_by_token)):
+@app.get("/logs/weight")
+def manage_get_weight_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
     return get_weight_logs(current_user["user_id"], log_date)
 
 @app.post("/logs/weight")

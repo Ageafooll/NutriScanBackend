@@ -1,10 +1,10 @@
-from datetime import date
-import json
-
 import pymysql
 from passlib.context import CryptContext
+from datetime import date
 from time import sleep
-from schemas import AuthenticationPayload, ProfileUpdatePayload, FoodLogPayload, WaterLogPayload, WeightLogPayload
+from functools import wraps
+import json
+from schemas import AuthenticationPayload, ProfileUpdatePayload, FoodLogPayload, UserRestrictionPayload, WaterLogPayload, WeightLogPayload
 
 #DB variables
 HOST = "db_service"
@@ -122,17 +122,13 @@ SCHEMA = """
     );
 """
 
-class DatabaseError(Exception):
-    pass
 
-class DatabaseConnectionError(Exception):
-    pass
+# Error Handling
 
-class DatabaseAlreadyExistsError(DatabaseError):
-    pass
-
-class DatabaseNotFoundError(DatabaseError):
-    pass
+class DatabaseError(Exception): pass
+class DatabaseConnectionError(Exception): pass
+class DatabaseAlreadyExistsError(DatabaseError): pass
+class DatabaseNotFoundError(DatabaseError): pass
 
 def get_connection():
     retries = 10
@@ -300,12 +296,75 @@ def update_user_profile(user_id: int, p: ProfileUpdatePayload):
     finally:
         conn.close()
 
+def get_user_restrictions(user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM user_restrictions WHERE user_id=%s;", (user_id,))
+            results = cur.fetchall()
+            print(f"Restrictions retrieved successfully for user_id {user_id}")
+            return results
+
+    except pymysql.Error as e:
+        print(f"Database error during restrictions retrieval: {e}")
+        raise DatabaseError(f"Failed to retrieve user restrictions: {e}")
+
+    finally:
+        conn.close()
+
+def add_user_restriction(user_id: int, payload: UserRestrictionPayload):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO user_restrictions
+                (user_id, restriction_type, restriction_value)
+                VALUES (%s, %s, %s);
+                """,
+                (user_id, payload.restriction_type, payload.restriction_value)
+            )
+        conn.commit()
+        print(f"Restriction added successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during restriction addition: {e}")
+        raise DatabaseError(f"Failed to add user restriction: {e}")
+    
+    finally:
+        conn.close()
+
+def delete_user_restriction(restriction_id: int, user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM user_restrictions WHERE restriction_id=%s AND user_id=%s;", (restriction_id, user_id))
+            if cur.rowcount == 0:
+                raise DatabaseNotFoundError(f"No restriction found with id {restriction_id} for user_id {user_id}")
+            
+            cur.execute("DELETE FROM user_restrictions WHERE restriction_id=%s AND user_id=%s;", (restriction_id, user_id))
+        conn.commit()
+        print(f"Restriction with id {restriction_id} deleted successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during restriction deletion: {e}")
+        raise DatabaseError(f"Failed to delete user restriction: {e}")
+
+    finally:
+        conn.close()
+
 def get_food_logs(user_id: int, log_date: date):
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM foodlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            if log_date:
+                cur.execute("SELECT * FROM foodlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            else:
+                cur.execute("SELECT * FROM foodlogs WHERE user_id=%s;", (user_id,))
             results = cur.fetchall()
             print(f"Food log retrieved successfully for user_id {user_id} on {log_date}")
             return results
@@ -366,7 +425,10 @@ def get_water_logs(user_id: int, log_date: date):
 
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM waterlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            if log_date:
+                cur.execute("SELECT * FROM waterlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            else:
+                cur.execute("SELECT * FROM waterlogs WHERE user_id=%s;", (user_id,))
             results = cur.fetchall()
             print(f"Water log retrieved successfully for user_id {user_id} on {log_date}")
             return results
@@ -426,7 +488,10 @@ def get_weight_logs(user_id: int, log_date: date):
 
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM weightlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            if log_date:
+                cur.execute("SELECT * FROM weightlogs WHERE user_id=%s AND date=%s;", (user_id, log_date))
+            else:
+                cur.execute("SELECT * FROM weightlogs WHERE user_id=%s;", (user_id,))
             results = cur.fetchall()
             print(f"Weight log retrieved successfully for user_id {user_id} on {log_date}")
             return results

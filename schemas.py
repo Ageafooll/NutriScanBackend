@@ -33,6 +33,10 @@ class ProfileUpdatePayload(BaseModel):
     activity_level: str # SEDENTARY, LIGHTLY_ACTIVE, ACTIVE, VERY_ACTIVE
     goal_type: str # LOSE_WEIGHT, MAINTAIN_WEIGHT, GAIN_WEIGHT, GAIN_MUSCLE
 
+class UserRestrictionPayload(BaseModel):
+    restriction_type: str
+    restriction_value: str
+
 class FoodLogPayload(BaseModel):
     name: str
     calories: int
