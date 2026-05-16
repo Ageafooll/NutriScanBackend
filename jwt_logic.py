@@ -1,3 +1,4 @@
+import os
 import jwt
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, status
@@ -7,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 #   General json web token logic is implemented here
 # 
 
-SECRET_KEY = "hacklenmek_istiyorum_beni_hackleyin"
+SECRET_KEY = os.getenv("SECRET_KEY", "hacklenmek_istiyorum_beni_hackleyin")
 ALGORITHM ="HS256"
 ACCESS_TOKEN_EXPIRE = 1440
 

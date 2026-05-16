@@ -10,6 +10,14 @@ services:
     ports:
       - "3131:3131"
 
+    environment:
+      - SECRET_KEY=hacklenmek_istiyorum_beni_hackleyin
+      - DB_HOST=db_service
+      - DB_USER=python_api
+      - DB_PASSWORD=1234
+      - DB_NAME=users_db
+      - DB_PORT=3306
+
   # 
   # This is our AI Engine running the LLMs, image recognition
   # 
@@ -21,14 +29,6 @@ services:
     
     volumes:
       - ollama_data:/root/.ollama
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
   #
   # This is the mariadb database service
