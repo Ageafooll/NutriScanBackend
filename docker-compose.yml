@@ -22,13 +22,13 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   #
   # This is the mariadb database service

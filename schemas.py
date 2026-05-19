@@ -1,5 +1,3 @@
-import json
-
 from pydantic import BaseModel
 from typing import Dict, Optional
 from datetime import date
