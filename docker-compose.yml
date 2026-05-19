@@ -42,7 +42,7 @@ services:
 
     environment:
       - MARIADB_ROOT_PASSWORD=1234
-      - MARIADB_DATABASE=users_db
+      - MARIADB_DATABASE=nutriscan_db
       - MARIADB_USER=python_api
       - MARIADB_PASSWORD=1234
 
