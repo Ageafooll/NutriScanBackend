@@ -8,10 +8,17 @@ from time import sleep
 import requests
 import json
 import pymysql
-from schemas import ChatPrompt, FoodLogPayload, ImagePrompt, MealPrompt, AuthenticationPayload, ProfileUpdatePayload, UserRestrictionPayload, WaterLogPayload, WeightLogPayload
 
 from jwt_logic import create_token, get_user_by_token
-from database_logic import (
+from ai_logic import send_chat_prompt, send_meal_prompt, send_image_prompt, send_diet_prompt
+
+from schemas import (
+    ChatPrompt, DietMealPayload, DietProgramPayload, DietPrompt, FoodLogPayload, ImagePrompt, MealPrompt, 
+    AuthenticationPayload, ProfileUpdatePayload, UserRestrictionPayload, 
+    WaterLogPayload, WeightLogPayload
+) 
+
+from database import (
     DatabaseConnectionError, DatabaseError, DatabaseAlreadyExistsError, DatabaseNotFoundError,
     init_db,
     register_account, authenticate_account, delete_account,
@@ -19,7 +26,9 @@ from database_logic import (
     add_user_restriction, delete_user_restriction, get_user_restrictions,
     add_food_log, delete_food_log, get_food_logs,
     add_water_log, delete_water_log, get_water_logs, 
-    add_weight_log, delete_weight_log, get_weight_logs
+    add_weight_log, delete_weight_log, get_weight_logs,
+    create_diet_program, delete_diet_program, get_user_diet_programs,
+    add_diet_meal, delete_diet_meal, get_diet_meals,
 )
 
 @asynccontextmanager
@@ -29,90 +38,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-@app.get("/deneme")
-def deneme(current_user: dict = Depends(get_user_by_token)):
-    
-    response = {"bruh": "JWT calisiyor"}
-
-    response.update(current_user)
-
-    return response
-
-
-#               ----------------------------------
-#               Following endpoints are about LLMs
-#               ----------------------------------
-
-#
-# Regular chat prompts are sent here
-#
-@app.post("/chat")
-def manage_chat_prompt(user_prompt: ChatPrompt):
-    
-    print(f"Got the chat user_prompt: {user_prompt.prompt}")
-
-    final_response = send_chat_prompt(user_prompt.prompt)
-
-    if (final_response == -1):
-        raise HTTPException(status_code=500, detail="AI made a mistake")
-    else:
-        return final_response
-
-
-
-#
-# Meal information with no images are sent here to recieve nutrition information
-#
-@app.post("/mealnoimage")
-def manage_meal_prompt(user_prompt: MealPrompt):
-    
-    print(f"Got the meal prompt: {user_prompt.gram} of {user_prompt.name}")
-
-    final_response = send_meal_prompt(user_prompt.gram, user_prompt.name)
-
-    if (final_response == -1):
-        raise HTTPException(status_code=500, detail="AI made a mistake")
-    else:
-        return final_response
-
-
-
-#
-# Image prompts are sent here to recieve nutrition information
-#
-@app.post("/mealimage")
-def manage_image_prompt(user_prompt: ImagePrompt):
-    
-    print("Got the image in user_prompt")
-
-    final_response = send_image_prompt(user_prompt.base64Image)
-
-    if (final_response == -1):
-        raise HTTPException(status_code=500, detail="AI made a mistake")
-    else:
-        return final_response
-
-
-
-#
-# Goal is sent here to get diet plan
-#
-@app.post("/diet")
-def manage_diet_prompt(user_prompt: DietPrompt):
-
-    print(f"Got the user goal: {user_prompt.goal}")
-
-    final_response = send_diet_prompt(user_prompt.goal)
-
-    if (final_response == -1):
-        raise HTTPException(status_code=500, detail="AI made a mistake")
-    else:
-        return final_response
-
-
-#           --------------------------------------
-#           Following enpoints are about user management
-#           --------------------------------------
+# ===== Error Handlers =====
 
 @app.exception_handler(DatabaseError)
 async def database_error_exception_handler(request: Request, exc: DatabaseError):
@@ -142,12 +68,20 @@ async def database_not_found_error_handler(request: Request, exc: DatabaseNotFou
         content={"message": "Record not found."},
     )
 
-@app.post("/auth/register")
+# ===== Health and Debug =====
+@app.get("/test", tags=["Debug"])
+def test_jwt(current_user: dict = Depends(get_user_by_token)):
+    response = {"message": "JWT is working"}
+    response.update(current_user)
+    return response
+
+# ===== Authentication =====
+@app.post("/auth/register", tags=["Authentication"])
 def manage_register(payload: AuthenticationPayload):
     register_account(payload)
     return {"message": "Account registered successfully"}
 
-@app.post("/auth/login")
+@app.post("/auth/login", tags=["Authentication"])
 def manage_login(payload: AuthenticationPayload):
     # First part is about password authentication, no tokens yet
     auth_return = authenticate_account(payload)
@@ -159,73 +93,155 @@ def manage_login(payload: AuthenticationPayload):
     users_token = create_token(jwt_payload)
     return {"message": "Login successful", "access_token": users_token, "token_type": "bearer"}
 
-@app.delete("/users/me/remove")
+# ===== User Account and Profile =====
+@app.delete("/users/me/remove", tags=["Users"])
 def manage_remove_account(current_user: dict = Depends(get_user_by_token)):
     delete_account(current_user["user_id"])
     return {"message": "Account removed successfully"}
 
-@app.post("/users/me/profile")
+@app.post("/users/me/profile", tags=["Users"])
 def manage_update_profile(payload: ProfileUpdatePayload, current_user: dict = Depends(get_user_by_token)):
     update_user_profile(current_user["user_id"], payload)
     return {"message": "Profile updated successfully"}
 
-@app.get("/users/me/profile")
+@app.get("/users/me/profile", tags=["Users"])
 def manage_get_profile(current_user: dict = Depends(get_user_by_token)):
     return get_user_profile(current_user["user_id"])
 
-@app.get("/users/me/restrictions")
+@app.get("/users/me/restrictions", tags=["Users"])
 def manage_get_restrictions(current_user: dict = Depends(get_user_by_token)):
     return get_user_restrictions(current_user["user_id"])
 
-@app.post("/users/me/restrictions")
+# ===== User Restrictions =====
+@app.post("/users/me/restrictions", tags=["Users"])
 def manage_add_restrictions(payloads: List[UserRestrictionPayload], current_user: dict = Depends(get_user_by_token)):
     for payload in payloads:
         add_user_restriction(current_user["user_id"], payload)
     return {"message": "Restrictions added successfully"}
 
-@app.delete("/users/me/restrictions/{restriction_id}")
+@app.delete("/users/me/restrictions/{restriction_id}", tags=["Users"])
 def manage_delete_restriction(restriction_id: int, current_user: dict = Depends(get_user_by_token)):
     delete_user_restriction(restriction_id, current_user["user_id"])
     return {"message": "Restriction deleted successfully"}
 
-@app.get("/logs/food")
+# ===== Food Logs =====
+@app.get("/logs/food", tags=["Food Logs"])
 def manage_get_food_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
     return get_food_logs(current_user["user_id"], log_date)
 
-@app.post("/logs/food")
+@app.post("/logs/food", tags=["Food Logs"])
 def manage_add_food_log(payload: FoodLogPayload, current_user: dict = Depends(get_user_by_token)):
     add_food_log(current_user["user_id"], payload)
     return {"message": "Food log added successfully"}
 
-@app.delete("/logs/food/{foodlog_id}")
+@app.delete("/logs/food/{foodlog_id}", tags=["Food Logs"])
 def manage_delete_food_log(foodlog_id: int, current_user: dict = Depends(get_user_by_token)):
     delete_food_log(foodlog_id, current_user["user_id"])
     return {"message": "Food log deleted successfully"}
 
-@app.get("/logs/water")
+# ===== Water Logs =====
+@app.get("/logs/water", tags=["Water Logs"])
 def manage_get_water_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
     return get_water_logs(current_user["user_id"], log_date)
 
-@app.post("/logs/water")
+@app.post("/logs/water", tags=["Water Logs"])
 def manage_add_water_log(payload: WaterLogPayload, current_user: dict = Depends(get_user_by_token)):
     add_water_log(current_user["user_id"], payload)
     return {"message": "Water log added successfully"}
 
-@app.delete("/logs/water/{waterlog_id}")
+@app.delete("/logs/water/{waterlog_id}", tags=["Water Logs"])
 def manage_delete_water_log(waterlog_id: int, current_user: dict = Depends(get_user_by_token)):
     delete_water_log(waterlog_id, current_user["user_id"])
     return {"message": "Water log deleted successfully"}
 
-@app.get("/logs/weight")
+# ===== Weight Logs =====
+@app.get("/logs/weight", tags=["Weight Logs"])
 def manage_get_weight_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
     return get_weight_logs(current_user["user_id"], log_date)
 
-@app.post("/logs/weight")
+@app.post("/logs/weight", tags=["Weight Logs"])
 def manage_add_weight_log(payload: WeightLogPayload, current_user: dict = Depends(get_user_by_token)):
     add_weight_log(current_user["user_id"], payload)
     return {"message": "Weight log added successfully"}
 
-@app.delete("/logs/weight/{weightlog_id}")
+@app.delete("/logs/weight/{weightlog_id}", tags=["Weight Logs"])
 def manage_delete_weight_log(weightlog_id: int, current_user: dict = Depends(get_user_by_token)):
     delete_weight_log(weightlog_id, current_user["user_id"])
     return {"message": "Weight log deleted successfully"}
+
+# ===== Diet Program Management =====
+@app.get("/diet/programs", tags=["Diet Programs"])
+def manage_get_diet_programs(current_user: dict = Depends(get_user_by_token)):
+    return get_user_diet_programs(current_user["user_id"])
+
+@app.post("/diet/programs", tags=["Diet Programs"])
+def manage_create_diet_program(payload: DietProgramPayload, current_user: dict = Depends(get_user_by_token)):
+    create_diet_program(current_user["user_id"], payload)
+    return {"message": "Diet program created successfully"}
+
+@app.delete("/diet/programs/{diet_id}", tags=["Diet Programs"])
+def manage_delete_diet_program(diet_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_diet_program(diet_id, current_user["user_id"])
+    return {"message": "Diet program deleted successfully"}
+
+@app.get("/diet/{diet_id}/meals", tags=["Diet Programs"])
+def manage_get_diet_meals(diet_id: int, current_user: dict = Depends(get_user_by_token)):
+    return get_diet_meals(diet_id, current_user["user_id"])
+
+@app.post("/diet/{diet_id}/meals", tags=["Diet Programs"])
+def manage_add_diet_meal(diet_id: int, payload: DietMealPayload, current_user: dict = Depends(get_user_by_token)):
+    add_diet_meal(diet_id, payload)
+    return {"message": "Diet meal added successfully"}
+
+@app.delete("/diet/{diet_id}/meals/{meal_id}", tags=["Diet Programs"])
+def manage_delete_diet_meal(diet_id: int, meal_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_diet_meal(meal_id, diet_id, current_user["user_id"])
+    return {"message": "Diet meal deleted successfully"}
+
+# ===== AI Endpoints =====
+@app.post("/ai/chat", tags=["AI"])
+def manage_chat_prompt(user_prompt: ChatPrompt):
+    print(f"Got the chat user_prompt: {user_prompt.prompt}")
+
+    final_response = send_chat_prompt(user_prompt.prompt)
+
+    if (final_response == -1):
+        raise HTTPException(status_code=500, detail="AI made a mistake")
+    else:
+        return final_response
+
+
+@app.post("/ai/mealnoimage", tags=["AI"])
+def manage_meal_prompt(user_prompt: MealPrompt):
+    print(f"Got the meal prompt: {user_prompt.gram} of {user_prompt.name}")
+
+    final_response = send_meal_prompt(user_prompt.gram, user_prompt.name)
+
+    if (final_response == -1):
+        raise HTTPException(status_code=500, detail="AI made a mistake")
+    else:
+        return final_response
+
+
+@app.post("/ai/mealimage", tags=["AI"])
+def manage_image_prompt(user_prompt: ImagePrompt):
+    print("Got the image in user_prompt")
+
+    final_response = send_image_prompt(user_prompt.base64Image)
+
+    if (final_response == -1):
+        raise HTTPException(status_code=500, detail="AI made a mistake")
+    else:
+        return final_response
+
+
+@app.post("/ai/diet", tags=["AI"])
+def manage_diet_prompt(user_prompt: DietPrompt):
+    print(f"Got the user goal: {user_prompt.goal}")
+
+    final_response = send_diet_prompt(user_prompt.goal)
+
+    if (final_response == -1):
+        raise HTTPException(status_code=500, detail="AI made a mistake")
+    else:
+        return final_response

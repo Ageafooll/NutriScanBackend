@@ -1,3 +1,5 @@
+import json
+
 from pydantic import BaseModel
 from typing import Dict, Optional
 from datetime import date
@@ -15,6 +17,9 @@ class ImagePrompt(BaseModel):
 class MealPrompt(BaseModel):
     name: str
     gram: int
+
+class DietPrompt(BaseModel):
+    goal: str
 
 class AuthenticationPayload(BaseModel):
     mail: str
@@ -55,3 +60,23 @@ class WaterLogPayload(BaseModel):
 class WeightLogPayload(BaseModel):
     weight: int # kg
     log_date: date
+
+class DietProgramPayload(BaseModel):
+    start_date: date
+    end_date: date
+    target_calories: int
+    target_protein: int
+    target_carbs: int
+    target_fat: int
+    goal_type: str
+
+class DietMealPayload(BaseModel):
+    meal_name: str
+    calories: int
+    carbs: float
+    proteins: float
+    fats: float
+    micronutrients: Optional[Dict[str, float]] = {}
+    serving_size: int
+    meal_type: str # BREAKFAST, LUNCH, DINNER, SNACK
+    date: date
