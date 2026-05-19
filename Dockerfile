@@ -7,5 +7,6 @@ ENV PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir fastapi uvicorn pydantic requests pymysql passlib passlib[argon2] pyjwt
 
 COPY *.py /app/
+COPY database /app/database
 
 CMD ["uvicorn", "api_gateway:app", "--host", "0.0.0.0", "--port", "3131", "--reload"]

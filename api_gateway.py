@@ -1,59 +1,206 @@
-from fastapi import FastAPI, APIRouter, HTTPException, status, Depends
+from datetime import date
+from typing import List
+from fastapi import FastAPI, APIRouter, HTTPException, status, Depends, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
+from time import sleep
 import requests
 import json
 import pymysql
 
-from ai_logic import send_chat_prompt, send_meal_prompt, send_image_prompt, send_diet_prompt
-from database_logic import add_user, authenticate_user, remove_user
 from jwt_logic import create_token, get_user_by_token
+from ai_logic import send_chat_prompt, send_meal_prompt, send_image_prompt, send_diet_prompt
 
-app = FastAPI()
+from schemas import (
+    ChatPrompt, DietMealPayload, DietProgramPayload, DietPrompt, FoodLogPayload, ImagePrompt, MealPrompt, 
+    AuthenticationPayload, ProfileUpdatePayload, UserRestrictionPayload, 
+    WaterLogPayload, WeightLogPayload
+) 
 
-#
-# Kinds of payloads that our endpoints will accept
-#
-class ChatPrompt(BaseModel):
-    prompt: str
+from database import (
+    DatabaseConnectionError, DatabaseError, DatabaseAlreadyExistsError, DatabaseNotFoundError,
+    init_db,
+    register_account, authenticate_account, delete_account,
+    update_user_profile, get_user_profile,
+    add_user_restriction, delete_user_restriction, get_user_restrictions,
+    add_food_log, delete_food_log, get_food_logs,
+    add_water_log, delete_water_log, get_water_logs, 
+    add_weight_log, delete_weight_log, get_weight_logs,
+    create_diet_program, delete_diet_program, get_user_diet_programs,
+    add_diet_meal, delete_diet_meal, get_diet_meals,
+)
 
-class ImagePrompt(BaseModel):
-    base64Image: str
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
-class MealPrompt(BaseModel):
-    name: str
-    gram: int
+app = FastAPI(lifespan=lifespan)
 
-class DietPrompt(BaseModel):
-    goal: str
+# ===== Error Handlers =====
 
-class AuthenticationPayload(BaseModel):
-    username: str
-    password: str
+@app.exception_handler(DatabaseError)
+async def database_error_exception_handler(request: Request, exc: DatabaseError):
+    return JSONResponse(
+        status_code=500,
+        content={"message": "An error occurred while processing your request. Please try again later."},
+    )
 
-class RemovePayload(BaseModel):
-    username: str
+@app.exception_handler(DatabaseConnectionError)
+async def database_connection_error_handler(request: Request, exc: DatabaseConnectionError):
+    return JSONResponse(
+        status_code=500,
+        content={"message": "Failed to connect to the database. Please try again later."},
+    )
 
+@app.exception_handler(DatabaseAlreadyExistsError)
+async def database_already_exists_error_handler(request: Request, exc: DatabaseAlreadyExistsError):
+    return JSONResponse(
+        status_code=400,
+        content={"message": "A record with this identifier already exists."},
+    )
 
-@app.get("/deneme")
-def deneme(current_user: dict = Depends(get_user_by_token)):
-    
-    response = {"bruh": "JWT calisiyor"}
+@app.exception_handler(DatabaseNotFoundError)
+async def database_not_found_error_handler(request: Request, exc: DatabaseNotFoundError):
+    return JSONResponse(
+        status_code=404,
+        content={"message": "Record not found."},
+    )
 
+# ===== Health and Debug =====
+@app.get("/test", tags=["Debug"])
+def test_jwt(current_user: dict = Depends(get_user_by_token)):
+    response = {"message": "JWT is working"}
     response.update(current_user)
-
     return response
 
+# ===== Authentication =====
+@app.post("/auth/register", tags=["Authentication"])
+def manage_register(payload: AuthenticationPayload):
+    register_account(payload)
+    return {"message": "Account registered successfully"}
 
-#               ----------------------------------
-#               Following endpoints are about LLMs
-#               ----------------------------------
+@app.post("/auth/login", tags=["Authentication"])
+def manage_login(payload: AuthenticationPayload):
+    # First part is about password authentication, no tokens yet
+    auth_return = authenticate_account(payload)
+    user_id = auth_return['user_id']
+    is_premium = auth_return['has_premium']
 
-#
-# Regular chat prompts are sent here
-#
-@app.post("/chat")
+    # We will handle the token in this part
+    jwt_payload = {"sub": str(user_id), "is_premium": is_premium}
+    users_token = create_token(jwt_payload)
+    return {"message": "Login successful", "access_token": users_token, "token_type": "bearer"}
+
+# ===== User Account and Profile =====
+@app.delete("/users/me/remove", tags=["Users"])
+def manage_remove_account(current_user: dict = Depends(get_user_by_token)):
+    delete_account(current_user["user_id"])
+    return {"message": "Account removed successfully"}
+
+@app.post("/users/me/profile", tags=["Users"])
+def manage_update_profile(payload: ProfileUpdatePayload, current_user: dict = Depends(get_user_by_token)):
+    update_user_profile(current_user["user_id"], payload)
+    return {"message": "Profile updated successfully"}
+
+@app.get("/users/me/profile", tags=["Users"])
+def manage_get_profile(current_user: dict = Depends(get_user_by_token)):
+    return get_user_profile(current_user["user_id"])
+
+@app.get("/users/me/restrictions", tags=["Users"])
+def manage_get_restrictions(current_user: dict = Depends(get_user_by_token)):
+    return get_user_restrictions(current_user["user_id"])
+
+# ===== User Restrictions =====
+@app.post("/users/me/restrictions", tags=["Users"])
+def manage_add_restrictions(payloads: List[UserRestrictionPayload], current_user: dict = Depends(get_user_by_token)):
+    for payload in payloads:
+        add_user_restriction(current_user["user_id"], payload)
+    return {"message": "Restrictions added successfully"}
+
+@app.delete("/users/me/restrictions/{restriction_id}", tags=["Users"])
+def manage_delete_restriction(restriction_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_user_restriction(restriction_id, current_user["user_id"])
+    return {"message": "Restriction deleted successfully"}
+
+# ===== Food Logs =====
+@app.get("/logs/food", tags=["Food Logs"])
+def manage_get_food_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
+    return get_food_logs(current_user["user_id"], log_date)
+
+@app.post("/logs/food", tags=["Food Logs"])
+def manage_add_food_log(payload: FoodLogPayload, current_user: dict = Depends(get_user_by_token)):
+    add_food_log(current_user["user_id"], payload)
+    return {"message": "Food log added successfully"}
+
+@app.delete("/logs/food/{foodlog_id}", tags=["Food Logs"])
+def manage_delete_food_log(foodlog_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_food_log(foodlog_id, current_user["user_id"])
+    return {"message": "Food log deleted successfully"}
+
+# ===== Water Logs =====
+@app.get("/logs/water", tags=["Water Logs"])
+def manage_get_water_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
+    return get_water_logs(current_user["user_id"], log_date)
+
+@app.post("/logs/water", tags=["Water Logs"])
+def manage_add_water_log(payload: WaterLogPayload, current_user: dict = Depends(get_user_by_token)):
+    add_water_log(current_user["user_id"], payload)
+    return {"message": "Water log added successfully"}
+
+@app.delete("/logs/water/{waterlog_id}", tags=["Water Logs"])
+def manage_delete_water_log(waterlog_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_water_log(waterlog_id, current_user["user_id"])
+    return {"message": "Water log deleted successfully"}
+
+# ===== Weight Logs =====
+@app.get("/logs/weight", tags=["Weight Logs"])
+def manage_get_weight_logs(log_date: date = None, current_user: dict = Depends(get_user_by_token)):
+    return get_weight_logs(current_user["user_id"], log_date)
+
+@app.post("/logs/weight", tags=["Weight Logs"])
+def manage_add_weight_log(payload: WeightLogPayload, current_user: dict = Depends(get_user_by_token)):
+    add_weight_log(current_user["user_id"], payload)
+    return {"message": "Weight log added successfully"}
+
+@app.delete("/logs/weight/{weightlog_id}", tags=["Weight Logs"])
+def manage_delete_weight_log(weightlog_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_weight_log(weightlog_id, current_user["user_id"])
+    return {"message": "Weight log deleted successfully"}
+
+# ===== Diet Program Management =====
+@app.get("/diet/programs", tags=["Diet Programs"])
+def manage_get_diet_programs(current_user: dict = Depends(get_user_by_token)):
+    return get_user_diet_programs(current_user["user_id"])
+
+@app.post("/diet/programs", tags=["Diet Programs"])
+def manage_create_diet_program(payload: DietProgramPayload, current_user: dict = Depends(get_user_by_token)):
+    create_diet_program(current_user["user_id"], payload)
+    return {"message": "Diet program created successfully"}
+
+@app.delete("/diet/programs/{diet_id}", tags=["Diet Programs"])
+def manage_delete_diet_program(diet_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_diet_program(diet_id, current_user["user_id"])
+    return {"message": "Diet program deleted successfully"}
+
+@app.get("/diet/{diet_id}/meals", tags=["Diet Programs"])
+def manage_get_diet_meals(diet_id: int, current_user: dict = Depends(get_user_by_token)):
+    return get_diet_meals(diet_id, current_user["user_id"])
+
+@app.post("/diet/{diet_id}/meals", tags=["Diet Programs"])
+def manage_add_diet_meal(diet_id: int, payload: DietMealPayload, current_user: dict = Depends(get_user_by_token)):
+    add_diet_meal(diet_id, payload)
+    return {"message": "Diet meal added successfully"}
+
+@app.delete("/diet/{diet_id}/meals/{meal_id}", tags=["Diet Programs"])
+def manage_delete_diet_meal(diet_id: int, meal_id: int, current_user: dict = Depends(get_user_by_token)):
+    delete_diet_meal(meal_id, diet_id, current_user["user_id"])
+    return {"message": "Diet meal deleted successfully"}
+
+# ===== AI Endpoints =====
+@app.post("/ai/chat", tags=["AI"])
 def manage_chat_prompt(user_prompt: ChatPrompt):
-    
     print(f"Got the chat user_prompt: {user_prompt.prompt}")
 
     final_response = send_chat_prompt(user_prompt.prompt)
@@ -64,13 +211,8 @@ def manage_chat_prompt(user_prompt: ChatPrompt):
         return final_response
 
 
-
-#
-# Meal information with no images are sent here to recieve nutrition information
-#
-@app.post("/mealnoimage")
+@app.post("/ai/mealnoimage", tags=["AI"])
 def manage_meal_prompt(user_prompt: MealPrompt):
-    
     print(f"Got the meal prompt: {user_prompt.gram} of {user_prompt.name}")
 
     final_response = send_meal_prompt(user_prompt.gram, user_prompt.name)
@@ -81,13 +223,8 @@ def manage_meal_prompt(user_prompt: MealPrompt):
         return final_response
 
 
-
-#
-# Image prompts are sent here to recieve nutrition information
-#
-@app.post("/mealimage")
+@app.post("/ai/mealimage", tags=["AI"])
 def manage_image_prompt(user_prompt: ImagePrompt):
-    
     print("Got the image in user_prompt")
 
     final_response = send_image_prompt(user_prompt.base64Image)
@@ -98,13 +235,8 @@ def manage_image_prompt(user_prompt: ImagePrompt):
         return final_response
 
 
-
-#
-# Goal is sent here to get diet plan
-#
-@app.post("/diet")
+@app.post("/ai/diet", tags=["AI"])
 def manage_diet_prompt(user_prompt: DietPrompt):
-
     print(f"Got the user goal: {user_prompt.goal}")
 
     final_response = send_diet_prompt(user_prompt.goal)
@@ -113,84 +245,3 @@ def manage_diet_prompt(user_prompt: DietPrompt):
         raise HTTPException(status_code=500, detail="AI made a mistake")
     else:
         return final_response
-
-
-#           --------------------------------------
-#           Following enpoints are about user management
-#           --------------------------------------
-
-#
-# Username and passwords are sent here to create account
-#
-@app.post("/register")
-def manage_register(payload: AuthenticationPayload):
-
-
-    match add_user(payload.username, payload.password):
-        case 1:
-            return {"message": "Created user"}
-        case -1:
-            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
-        case -2:
-            return {"message": f"User {payload.username} already exists"} 
-        case -3:
-            raise HTTPException(status_code=500, detail="Something wrong with the query")
-        case _:
-            return {"what":"what?"}
-    
-
-
-#
-# Username and passwords are sent here for password authentication, and then you claim the token
-#
-@app.post("/login")
-def manage_authentication(payload: AuthenticationPayload):
-
-    #
-    # First part is about password authentication, no tokens yet
-    #
-
-    auth_return = authenticate_user(payload.username, payload.password)
-
-    match auth_return:
-        case -1:
-            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
-        case -2:
-            return {"message": "Username or password is wrong"} 
-        case -3:
-            raise HTTPException(status_code=500, detail="Something wrong with the query")
-        case _:
-            user_id = auth_return['user_id']
-            is_premium = auth_return['is_premium']
-
-
-    #
-    # We will handle the token in this part
-    #
-
-    jwt_payload = {"sub": str(user_id), "is_premium": is_premium}
-
-    users_token = create_token(jwt_payload)
-
-    return {"message": "login successful", "access_token": users_token, "token_type": "bearer"}
-
-
-
-#
-# Username is sent here to remove account
-#
-@app.post("/removeuser")
-def manage_authentication(payload: RemovePayload):
-
-
-    match remove_user(payload.username):
-        case 1:
-            return {"message": "Successfully deleted the user"}
-        case -1:
-            raise HTTPException(status_code=500, detail="Couldn't connecto to database")
-        case -2:
-            return {"message": f"User {payload.username} doesn't exists"} 
-        case -3:
-            raise HTTPException(status_code=500, detail="Something wrong with the query")
-        case _:
-            return {"what":"what?"}
