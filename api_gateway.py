@@ -130,6 +130,20 @@ def manage_remove_account(current_user: dict = Depends(get_user_by_token)):
     delete_account(current_user["user_id"])
     return {"message": "Account removed successfully"}
 
+@app.post("/users/me/premium", tags=["Users"])
+def manage_upgrade_to_premium(current_user: dict = Depends(get_user_by_token)):
+    upgrade_to_premium(current_user["user_id"])
+    jwt_payload = {"sub": str(current_user["user_id"]), "is_premium": 1}
+    new_token = create_token(jwt_payload)
+    return {"message": "Account upgraded to premium", "access_token": new_token, "token_type": "bearer"}
+
+@app.delete("/users/me/premium", tags=["Users"])
+def manage_downgrade_from_premium(current_user: dict = Depends(get_user_by_token)):
+    downgrade_from_premium(current_user["user_id"])
+    jwt_payload = {"sub": str(current_user["user_id"]), "is_premium": 0}
+    new_token = create_token(jwt_payload)
+    return {"message": "Premium subscription cancelled", "access_token": new_token, "token_type": "bearer"}
+
 @app.post("/users/me/profile", tags=["Users"])
 def manage_update_profile(payload: ProfileUpdatePayload, current_user: dict = Depends(get_user_by_token)):
     update_user_profile(current_user["user_id"], payload)
