@@ -97,14 +97,12 @@ def test_premium(current_user: dict = Depends(require_premium)):
 @app.post("/test/premium/upgrade", tags=["Debug"])
 def manage_upgrade_premium(current_user: dict = Depends(get_user_by_token)):
     # This is a debug endpoint to make a user premium
-    # In a real application, this would be replaced with a proper admin interface
     upgrade_to_premium(current_user["user_id"])
     return {"message": "User made premium"}
 
 @app.post("/test/premium/downgrade", tags=["Debug"])
 def manage_downgrade_premium(current_user: dict = Depends(get_user_by_token)):
     # This is a debug endpoint to make a user not premium
-    # In a real application, this would be replaced with a proper admin interface
     downgrade_from_premium(current_user["user_id"])
     return {"message": "User downgraded from premium"}
 
