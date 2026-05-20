@@ -199,7 +199,7 @@ def send_image_prompt(base64Image: str):
 #
 # Sending goal to get a diet plan accordingly
 #
-def send_diet_prompt(goal: str):
+def send_diet_prompt(goal: str, restrictions: list[str]):
 
 
     #
@@ -212,11 +212,11 @@ def send_diet_prompt(goal: str):
         "messages": [
             {
                 "role": "system",
-                "content": "You are a nutritionist. Send a 7 days of meal diet plan according to users goal. Send meal names and macros"
+                "content": "You are a nutritionist. Send a 7 days of meal diet plan according to users goal. Send meal names and macros. Make sure to consider users restrictions and avoid them in the diet plan."
             },
             {
                 "role": "user",
-                "content": f"Users goal is {goal}."
+                "content": f"Users goal is {goal}. Restrictions: {', '.join(restrictions)}."
             } 
         ],
 

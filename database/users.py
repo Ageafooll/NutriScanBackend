@@ -76,6 +76,44 @@ def delete_account(user_id: int):
     finally:
         conn.close()
 
+def upgrade_to_premium(user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET has_premium=1 WHERE user_id=%s;", (user_id,))
+            if cur.rowcount == 0:
+                raise DatabaseNotFoundError(f"User not found for user_id {user_id}")
+        
+        conn.commit()
+        print(f"Account upgraded to premium successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during account upgrade: {e}")
+        raise DatabaseError(f"Account upgrade failed: {e}")
+
+    finally:
+        conn.close()
+
+def downgrade_from_premium(user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET has_premium=0 WHERE user_id=%s;", (user_id,))
+            if cur.rowcount == 0:
+                raise DatabaseNotFoundError(f"User not found for user_id {user_id}")
+        
+        conn.commit()
+        print(f"Account downgraded from premium successfully for user_id {user_id}")
+
+    except pymysql.Error as e:
+        print(f"Database error during account downgrade: {e}")
+        raise DatabaseError(f"Account downgrade failed: {e}")
+
+    finally:
+        conn.close()
+
 
 # ====== Profile Management ======
 
@@ -196,3 +234,26 @@ def delete_user_restriction(restriction_id: int, user_id: int):
 
     finally:
         conn.close()
+
+
+# ====== Helper Functions ======
+
+def get_user(user_id: int):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM users WHERE user_id=%s;", (user_id,))
+            result = cur.fetchone()
+            if not result:
+                raise DatabaseNotFoundError(f"No user found with id {user_id}")
+            print(f"User retrieved successfully for user_id {user_id}")
+            return result
+
+    except pymysql.Error as e:
+        print(f"Database error during user retrieval: {e}")
+        raise DatabaseError(f"Failed to retrieve user: {e}")
+
+    finally:
+        conn.close()
+

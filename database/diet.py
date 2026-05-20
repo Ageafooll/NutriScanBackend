@@ -98,22 +98,28 @@ def get_diet_meals(diet_id: int, user_id: int):
         conn.close()
 
 
-def add_diet_meal(diet_id: int, p: DietMealPayload):
+def add_diet_meal(diet_id: int, p: DietMealPayload, user_id: int):
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO diet_meals
-                (diet_id, meal_name, calories, protein, carbs, fat, micros, serving_size, meal_type, date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                INSERT INTO diet_meals (diet_id, meal_name, calories, protein, carbs, fat)
+                SELECT %s, %s, %s, %s, %s, %s
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM diet_program dp
+                    WHERE dp.diet_id = %s AND dp.user_id = %s
+                );
                 """,
-                (diet_id, p.meal_name, p.calories, p.proteins, p.carbs, p.fats, 
-                json.dumps(p.micronutrients), p.serving_size, p.meal_type, p.date)
+                (diet_id, p.meal_name, p.calories, p.protein, p.carbs, p.fat, diet_id, user_id)
             )
+            if cur.rowcount == 0:
+                raise DatabaseNotFoundError(f"No diet program found with id {diet_id} for user_id {user_id}")
+
         conn.commit()
-        print(f"Diet meal added successfully to diet_id {diet_id}")
+        print(f"Diet meal '{p.meal_name}' added successfully to diet_id {diet_id} for user_id {user_id}")
 
     except pymysql.Error as e:
         print(f"Database error during diet meal addition: {e}")

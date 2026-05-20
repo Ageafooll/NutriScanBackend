@@ -19,6 +19,8 @@ from .users import (
     register_account,
     authenticate_account,
     delete_account,
+    upgrade_to_premium,
+    downgrade_from_premium,
     # Profile Management
     get_user_profile,
     update_user_profile,
@@ -70,6 +72,8 @@ __all__ = [
     "register_account",
     "authenticate_account",
     "delete_account",
+    "upgrade_to_premium",
+    "downgrade_from_premium",
     "get_user_profile",
     "update_user_profile",
     "get_user_restrictions",

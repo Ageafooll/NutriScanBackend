@@ -22,6 +22,7 @@ from database import (
     DatabaseConnectionError, DatabaseError, DatabaseAlreadyExistsError, DatabaseNotFoundError,
     init_db,
     register_account, authenticate_account, delete_account,
+    upgrade_to_premium, downgrade_from_premium,
     update_user_profile, get_user_profile,
     add_user_restriction, delete_user_restriction, get_user_restrictions,
     add_food_log, delete_food_log, get_food_logs,
@@ -68,12 +69,44 @@ async def database_not_found_error_handler(request: Request, exc: DatabaseNotFou
         content={"message": "Record not found."},
     )
 
+# ==== Helper Functions =====
+def require_premium(current_user: dict = Depends(get_user_by_token)):
+    if not current_user.get("is_premium"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This feature requires a premium subscription."
+        )
+        
+    return current_user
+
 # ===== Health and Debug =====
-@app.get("/test", tags=["Debug"])
+@app.get("/health", tags=["Debug"])
+def health_check():
+    return {"status": "ok"}
+
+@app.get("/test/jwt", tags=["Debug"])
 def test_jwt(current_user: dict = Depends(get_user_by_token)):
     response = {"message": "JWT is working"}
     response.update(current_user)
     return response
+
+@app.get("/test/premium", tags=["Debug"])
+def test_premium(current_user: dict = Depends(require_premium)):
+    return {"message": "User is premium"}
+
+@app.post("/test/premium/upgrade", tags=["Debug"])
+def manage_upgrade_premium(current_user: dict = Depends(get_user_by_token)):
+    # This is a debug endpoint to make a user premium
+    # In a real application, this would be replaced with a proper admin interface
+    upgrade_to_premium(current_user["user_id"])
+    return {"message": "User made premium"}
+
+@app.post("/test/premium/downgrade", tags=["Debug"])
+def manage_downgrade_premium(current_user: dict = Depends(get_user_by_token)):
+    # This is a debug endpoint to make a user not premium
+    # In a real application, this would be replaced with a proper admin interface
+    downgrade_from_premium(current_user["user_id"])
+    return {"message": "User downgraded from premium"}
 
 # ===== Authentication =====
 @app.post("/auth/register", tags=["Authentication"])
@@ -108,11 +141,11 @@ def manage_update_profile(payload: ProfileUpdatePayload, current_user: dict = De
 def manage_get_profile(current_user: dict = Depends(get_user_by_token)):
     return get_user_profile(current_user["user_id"])
 
+# ===== User Restrictions =====
 @app.get("/users/me/restrictions", tags=["Users"])
 def manage_get_restrictions(current_user: dict = Depends(get_user_by_token)):
     return get_user_restrictions(current_user["user_id"])
 
-# ===== User Restrictions =====
 @app.post("/users/me/restrictions", tags=["Users"])
 def manage_add_restrictions(payloads: List[UserRestrictionPayload], current_user: dict = Depends(get_user_by_token)):
     for payload in payloads:
@@ -175,7 +208,7 @@ def manage_get_diet_programs(current_user: dict = Depends(get_user_by_token)):
     return get_user_diet_programs(current_user["user_id"])
 
 @app.post("/diet/programs", tags=["Diet Programs"])
-def manage_create_diet_program(payload: DietProgramPayload, current_user: dict = Depends(get_user_by_token)):
+def manage_create_diet_program(payload: DietProgramPayload, current_user: dict = Depends(require_premium)):
     create_diet_program(current_user["user_id"], payload)
     return {"message": "Diet program created successfully"}
 
@@ -190,7 +223,7 @@ def manage_get_diet_meals(diet_id: int, current_user: dict = Depends(get_user_by
 
 @app.post("/diet/{diet_id}/meals", tags=["Diet Programs"])
 def manage_add_diet_meal(diet_id: int, payload: DietMealPayload, current_user: dict = Depends(get_user_by_token)):
-    add_diet_meal(diet_id, payload)
+    add_diet_meal(diet_id, payload, current_user["user_id"])
     return {"message": "Diet meal added successfully"}
 
 @app.delete("/diet/{diet_id}/meals/{meal_id}", tags=["Diet Programs"])
@@ -200,8 +233,7 @@ def manage_delete_diet_meal(diet_id: int, meal_id: int, current_user: dict = Dep
 
 # ===== AI Endpoints =====
 @app.post("/ai/chat", tags=["AI"])
-def manage_chat_prompt(user_prompt: ChatPrompt):
-    print(f"Got the chat user_prompt: {user_prompt.prompt}")
+def manage_chat_prompt(user_prompt: ChatPrompt, current_user: dict = Depends(get_user_by_token)):
 
     final_response = send_chat_prompt(user_prompt.prompt)
 
@@ -212,8 +244,7 @@ def manage_chat_prompt(user_prompt: ChatPrompt):
 
 
 @app.post("/ai/mealnoimage", tags=["AI"])
-def manage_meal_prompt(user_prompt: MealPrompt):
-    print(f"Got the meal prompt: {user_prompt.gram} of {user_prompt.name}")
+def manage_meal_prompt(user_prompt: MealPrompt, current_user: dict = Depends(get_user_by_token)):
 
     final_response = send_meal_prompt(user_prompt.gram, user_prompt.name)
 
@@ -224,8 +255,7 @@ def manage_meal_prompt(user_prompt: MealPrompt):
 
 
 @app.post("/ai/mealimage", tags=["AI"])
-def manage_image_prompt(user_prompt: ImagePrompt):
-    print("Got the image in user_prompt")
+def manage_image_prompt(user_prompt: ImagePrompt, current_user: dict = Depends(get_user_by_token)):
 
     final_response = send_image_prompt(user_prompt.base64Image)
 
@@ -236,10 +266,12 @@ def manage_image_prompt(user_prompt: ImagePrompt):
 
 
 @app.post("/ai/diet", tags=["AI"])
-def manage_diet_prompt(user_prompt: DietPrompt):
-    print(f"Got the user goal: {user_prompt.goal}")
+def manage_diet_prompt(user_prompt: DietPrompt, current_user: dict = Depends(require_premium)):
 
-    final_response = send_diet_prompt(user_prompt.goal)
+    # We will get the restrictions of the user and send them to the AI to consider in the diet plan
+    restrictions = get_user_restrictions(current_user["user_id"])
+
+    final_response = send_diet_prompt(user_prompt.goal, restrictions)
 
     if (final_response == -1):
         raise HTTPException(status_code=500, detail="AI made a mistake")
