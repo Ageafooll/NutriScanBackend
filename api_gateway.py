@@ -116,8 +116,12 @@ def manage_register(payload: AuthenticationPayload):
 def manage_login(payload: AuthenticationPayload):
     # First part is about password authentication, no tokens yet
     auth_return = authenticate_account(payload)
-    user_id = auth_return['user_id']
-    is_premium = auth_return['has_premium']
+
+    if(auth_return):
+        user_id = auth_return['user_id']
+        is_premium = auth_return['has_premium']
+    else:
+        return {"message": "Mail or password is wrong"}
 
     # We will handle the token in this part
     jwt_payload = {"sub": str(user_id), "is_premium": is_premium}
