@@ -96,6 +96,8 @@ SCHEMA = """
         target_carbs INT,
         target_fat INT,
         goal_type VARCHAR(20) -- LOSE_WEIGHT, MAINTAIN_WEIGHT, GAIN_WEIGHT, GAIN_MUSCLE
+
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS diet_meals (
