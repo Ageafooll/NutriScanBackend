@@ -113,7 +113,7 @@ def add_diet_meal(diet_id: int, p: DietMealPayload, user_id: int):
                     WHERE dp.diet_id = %s AND dp.user_id = %s
                 );
                 """,
-                (diet_id, p.meal_name, p.calories, p.protein, p.carbs, p.fat, diet_id, user_id)
+                (diet_id, p.meal_name, p.calories, p.proteins, p.carbs, p.fats, diet_id, user_id)
             )
             if cur.rowcount == 0:
                 raise DatabaseNotFoundError(f"No diet program found with id {diet_id} for user_id {user_id}")
