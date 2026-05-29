@@ -73,7 +73,7 @@ def send_meal_prompt(gram: int, name: str):
         "messages": [
             {
                 "role": "system",
-                "content": "You are a nutritionist. Calculate the macros for the provided meal."
+                "content": "You are a nutritionist. Calculate the macro and micronutrient values for the provided meal."
             },
             {
                 "role": "user",
@@ -105,9 +105,13 @@ def send_meal_prompt(gram: int, name: str):
                 {
                     "type": "integer",
                     "description": "Fat content in grams"
+                },
+                "micronutrients": {
+                    "type": "object",
+                    "description": "Micronutrients content in milligrams",  
                 }
             },
-            "required": ["calories", "proteins", "carbohydrates", "fats"]
+            "required": ["calories", "proteins", "carbohydrates", "fats", "micronutrients"]
         }
     }
 
@@ -245,13 +249,18 @@ def send_diet_prompt(goal: str, restrictions: list[str]):
                             "properties": 
                             {
                                 "food_name": {"type": "string", "description": "The name of the suggested food"},
+                                "meal_type": {"type": "string", "description": "The type of the meal (breakfast, lunch, or dinner)"},
                                 "gram": {"type": "integer", "description": "The meals estimated weight in grams"},
                                 "calories": {"type": "integer","description": "Calories in kcal"},
                                 "proteins": {"type": "integer", "description": "Protein content in grams"},
                                 "carbohydrates": {"type": "integer","description": "Carbohydrate content in grams"},
-                                "fats": {"type": "integer","description": "Fat content in grams"}
+                                "fats": {"type": "integer","description": "Fat content in grams"},
+                                "micronutrients": {
+                                    "type": "object",
+                                    "description": "Micronutrients content in milligrams",  
+                                }
                             },
-                            "required": ["food_name", "gram", "calories", "proteins", "carbohydrates", "fats"]
+                            "required": ["food_name", "meal_type", "gram", "calories", "proteins", "carbohydrates", "fats", "micronutrients"]
                         }
 
                     }
